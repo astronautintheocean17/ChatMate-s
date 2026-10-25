@@ -3,6 +3,9 @@
 -- RUN THIS FILE ONLY IF YOUR SUPABASE PROJECT ALREADY HAS THE CHATMATE SCHEMA.
 -- It is the short delta file for an existing project. It is safe to run twice.
 --
+-- IMPORTANT: Run supabase/0003_three_join_modes.sql afterwards. 0002 is the
+-- schema/base upgrade; 0003 is the current three-mode join behavior.
+--
 -- Fresh/empty Supabase project? Run supabase/0001_init.sql instead.
 
 begin;

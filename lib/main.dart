@@ -9,6 +9,7 @@ import 'theme/theme-controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await themeController.load();
 
   if (!SupabaseConfig.isConfigured) {
     runApp(const _ConfigApp());

@@ -16,4 +16,3 @@ class SupabaseConfig {
       supabaseAnonKey.isNotEmpty &&
       !supabaseAnonKey.contains('PASTE_YOUR_ANON_OR_PUBLISHABLE_KEY_HERE');
 }
-

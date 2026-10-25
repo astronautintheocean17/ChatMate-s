@@ -30,7 +30,10 @@ class SetupRequiredScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text('CHATMATE', style: AppText.mono(11, color: accent, ls: 2)),
+                  Text(
+                    'CHATMATE',
+                    style: AppText.mono(11, color: accent, ls: 2),
+                  ),
                   const SizedBox(height: 14),
                   Text(
                     'Supabase is not\nconfigured yet.',
@@ -45,11 +48,7 @@ class SetupRequiredScreen extends StatelessWidget {
                   const SizedBox(height: 14),
                   Text(
                     'Never use a service_role key in the app.',
-                    style: AppText.body(
-                      14,
-                      color: accent,
-                      w: FontWeight.w600,
-                    ),
+                    style: AppText.body(14, color: accent, w: FontWeight.w600),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 18),

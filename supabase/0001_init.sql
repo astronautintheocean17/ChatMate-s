@@ -1,6 +1,7 @@
 -- ChatMate production schema — FULL FRESH INSTALL
 -- Use this on a new/empty Supabase project only.
--- Existing ChatMate project? Run supabase/0002_invite_links.sql instead.
+-- Existing ChatMate project? Run supabase/0002_invite_links.sql, then
+-- supabase/0003_three_join_modes.sql.
 -- Run in Supabase Dashboard -> SQL Editor -> New query -> Run.
 -- Safe to re-run: objects use IF NOT EXISTS / CREATE OR REPLACE.
 
@@ -37,6 +38,7 @@ create table if not exists public.rooms (
   code text not null unique,
   visibility public.room_visibility not null default 'private',
   join_mode public.room_join_mode not null default 'request',
+  open_to_all boolean not null default false,
   creator_id uuid not null references public.profiles (id) on delete cascade,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -69,6 +71,24 @@ create table if not exists public.room_requests (
 alter table public.rooms
   add column if not exists join_mode public.room_join_mode not null
   default 'request';
+alter table public.rooms
+  add column if not exists open_to_all boolean not null default false;
+
+update public.rooms
+set visibility = 'private'
+where join_mode = 'request' and visibility <> 'private';
+
+update public.rooms
+set visibility = 'public'
+where join_mode = 'open' and visibility <> 'public';
+
+alter table public.rooms drop constraint if exists rooms_access_mode_check;
+alter table public.rooms
+  add constraint rooms_access_mode_check check (
+    (join_mode = 'request' and visibility = 'private' and not open_to_all)
+    or (join_mode = 'open' and visibility = 'public')
+  );
+
 alter table public.room_requests
   add column if not exists creator_approved boolean not null default true;
 alter table public.room_requests
@@ -310,9 +330,11 @@ $$;
 -- Return types changed with join modes, so old signatures must be removed
 -- before CREATE OR REPLACE. The calls are no-ops on a fresh database.
 drop function if exists public.create_room(text, public.room_visibility, uuid[]);
+drop function if exists public.create_room(text, public.room_visibility, public.room_join_mode, uuid[]);
 drop function if exists public.search_rooms(text);
 drop function if exists public.my_rooms();
 drop function if exists public.update_room(uuid, text, public.room_visibility);
+drop function if exists public.update_room(uuid, text, public.room_visibility, public.room_join_mode);
 drop function if exists public.my_requests();
 drop function if exists public.room_pending_requests(uuid);
 
@@ -320,6 +342,7 @@ create or replace function public.create_room(
   p_name text,
   p_visibility public.room_visibility default 'private',
   p_join_mode public.room_join_mode default 'request',
+  p_open_to_all boolean default false,
   p_member_ids uuid[] default '{}'
 ) returns jsonb
 language plpgsql security definer
@@ -328,8 +351,9 @@ as $$
 declare
   v_uid uuid := auth.uid();
   v_name text := btrim(coalesce(p_name, ''));
-  v_visibility public.room_visibility := coalesce(p_visibility, 'private');
   v_join_mode public.room_join_mode := coalesce(p_join_mode, 'request');
+  v_visibility public.room_visibility;
+  v_open_to_all boolean;
   v_code text;
   v_room_id uuid;
   v_created timestamptz;
@@ -342,9 +366,19 @@ begin
     raise exception 'Room name must be 1-60 characters.';
   end if;
 
+  if v_join_mode = 'request' then
+    v_visibility := 'private';
+    v_open_to_all := false;
+  else
+    v_visibility := 'public';
+    v_open_to_all := coalesce(p_open_to_all, false);
+  end if;
+
   v_code := public.generate_room_code();
-  insert into public.rooms (name, code, visibility, join_mode, creator_id)
-  values (v_name, v_code, v_visibility, v_join_mode, v_uid)
+  insert into public.rooms
+    (name, code, visibility, join_mode, open_to_all, creator_id)
+  values
+    (v_name, v_code, v_visibility, v_join_mode, v_open_to_all, v_uid)
   returning id, created_at into v_room_id, v_created;
 
   insert into public.room_members (room_id, user_id, role)
@@ -368,6 +402,7 @@ begin
     'code', v_code,
     'visibility', v_visibility,
     'join_mode', v_join_mode,
+    'open_to_all', v_open_to_all,
     'created_at', v_created
   );
 end;
@@ -380,6 +415,7 @@ returns table (
   code text,
   visibility public.room_visibility,
   join_mode public.room_join_mode,
+  open_to_all boolean,
   creator_handle citext,
   member_count integer,
   is_member boolean,
@@ -398,25 +434,28 @@ as $$
     r.code,
     r.visibility,
     r.join_mode,
+    r.open_to_all,
     p.handle as creator_handle,
     (select count(*)::int from public.room_members rm where rm.room_id = r.id),
     public.is_room_member(r.id),
-    (select rr.status from public.room_requests rr
-      where rr.room_id = r.id
-        and rr.user_id = auth.uid()
-        and rr.status = 'pending'
-      order by rr.created_at desc
-      limit 1)
+    case when r.join_mode = 'open' then null::public.request_status
+      else (select rr.status from public.room_requests rr
+        where rr.room_id = r.id
+          and rr.user_id = auth.uid()
+          and rr.status = 'pending'
+        order by rr.created_at desc
+        limit 1)
+    end
   from public.rooms r
   join public.profiles p on p.id = r.creator_id
   cross join q
   where
-    (q.term = '' and r.visibility = 'public')
+    (q.term = '' and r.join_mode = 'open' and r.open_to_all)
     or (
       q.term <> '' and (
-        (r.visibility = 'public'
+        (r.join_mode = 'open' and r.open_to_all
           and (lower(r.name) like '%' || q.term || '%' or r.code = q.code_term))
-        or (r.visibility = 'private' and r.code = q.code_term)
+        or (not r.open_to_all and r.code = q.code_term)
       )
     )
   order by r.updated_at desc
@@ -434,6 +473,7 @@ as $$
     'code', r.code,
     'visibility', r.visibility,
     'join_mode', r.join_mode,
+    'open_to_all', r.open_to_all,
     'creator_id', r.creator_id,
     'creator_handle', p.handle,
     'member_count', (select count(*)::int from public.room_members rm where rm.room_id = r.id),
@@ -470,6 +510,7 @@ returns table (
   code text,
   visibility public.room_visibility,
   join_mode public.room_join_mode,
+  open_to_all boolean,
   creator_handle citext,
   role text,
   member_count integer,
@@ -485,6 +526,7 @@ as $$
     r.code,
     r.visibility,
     r.join_mode,
+    r.open_to_all,
     p.handle as creator_handle,
     rm.role,
     (select count(*)::int from public.room_members rm2 where rm2.room_id = r.id),
@@ -527,12 +569,39 @@ begin
       'room_id', p_room_id,
       'room_name', v_room.name,
       'code', v_room.code,
-      'join_mode', v_room.join_mode
+      'join_mode', v_room.join_mode,
+      'open_to_all', v_room.open_to_all
     );
   end if;
 
-  -- Both modes are creator-gated. Open mode means the invite link can be
-  -- shared freely; a successful join still waits for the creator's approval.
+  -- Open to all may join by room ID. Open link must use join_room_by_code so
+  -- the person proves they have the link/code.
+  if v_room.join_mode = 'open' then
+    if not v_room.open_to_all then
+      raise exception 'This room only opens from its invite link. Use the link or code from the creator.';
+    end if;
+
+    insert into public.room_members (room_id, user_id, role)
+    values (p_room_id, v_uid, 'member')
+    on conflict (room_id, user_id) do nothing;
+
+    update public.room_requests
+    set status = 'accepted', responded_at = now()
+    where room_id = p_room_id and user_id = v_uid and status = 'pending';
+
+    update public.rooms set updated_at = now() where id = p_room_id;
+
+    return jsonb_build_object(
+      'status', 'member',
+      'room_id', p_room_id,
+      'room_name', v_room.name,
+      'code', v_room.code,
+      'join_mode', v_room.join_mode,
+      'open_to_all', v_room.open_to_all
+    );
+  end if;
+
+  -- Request only.
   select * into v_req
   from public.room_requests
   where room_id = p_room_id and user_id = v_uid and status = 'pending'
@@ -548,7 +617,8 @@ begin
       'room_id', p_room_id,
       'room_name', v_room.name,
       'code', v_room.code,
-      'join_mode', v_room.join_mode
+      'join_mode', v_room.join_mode,
+      'open_to_all', v_room.open_to_all
     );
   end if;
 
@@ -564,7 +634,8 @@ begin
     'room_id', p_room_id,
     'room_name', v_room.name,
     'code', v_room.code,
-    'join_mode', v_room.join_mode
+    'join_mode', v_room.join_mode,
+    'open_to_all', v_room.open_to_all
   );
 end;
 $$;
@@ -769,7 +840,8 @@ create or replace function public.update_room(
   p_room_id uuid,
   p_name text,
   p_visibility public.room_visibility,
-  p_join_mode public.room_join_mode default 'request'
+  p_join_mode public.room_join_mode default 'request',
+  p_open_to_all boolean default false
 ) returns void
 language plpgsql security definer
 set search_path = public, auth
@@ -777,6 +849,8 @@ as $$
 declare
   v_name text := btrim(coalesce(p_name, ''));
   v_join_mode public.room_join_mode := coalesce(p_join_mode, 'request');
+  v_visibility public.room_visibility;
+  v_open_to_all boolean;
 begin
   if not public.is_room_creator(p_room_id) then
     raise exception 'Only the room creator can edit this room.';
@@ -785,10 +859,19 @@ begin
     raise exception 'Room name must be 1-60 characters.';
   end if;
 
+  if v_join_mode = 'request' then
+    v_visibility := 'private';
+    v_open_to_all := false;
+  else
+    v_visibility := 'public';
+    v_open_to_all := coalesce(p_open_to_all, false);
+  end if;
+
   update public.rooms
   set name = v_name,
-      visibility = p_visibility,
+      visibility = v_visibility,
       join_mode = v_join_mode,
+      open_to_all = v_open_to_all,
       updated_at = now()
   where id = p_room_id;
 end;
@@ -877,32 +960,34 @@ as $$
     'code', r.code,
     'visibility', r.visibility,
     'join_mode', r.join_mode,
+    'open_to_all', r.open_to_all,
     'creator_handle', p.handle,
     'member_count', (
       select count(*)::int from public.room_members rm where rm.room_id = r.id
     ),
     'is_member', public.is_room_member(r.id),
-    'request_status', (
-      select rr.status from public.room_requests rr
-      where rr.room_id = r.id
-        and rr.user_id = auth.uid()
-        and rr.status = 'pending'
-      order by rr.created_at desc limit 1
-    ),
-    'request_kind', (
-      select rr.kind from public.room_requests rr
-      where rr.room_id = r.id
-        and rr.user_id = auth.uid()
-        and rr.status = 'pending'
-      order by rr.created_at desc limit 1
-    ),
-    'request_creator_approved', (
-      select rr.creator_approved from public.room_requests rr
-      where rr.room_id = r.id
-        and rr.user_id = auth.uid()
-        and rr.status = 'pending'
-      order by rr.created_at desc limit 1
-    )
+    'request_status', case when r.join_mode = 'open'
+      then null::public.request_status
+      else (select rr.status from public.room_requests rr
+        where rr.room_id = r.id
+          and rr.user_id = auth.uid()
+          and rr.status = 'pending'
+        order by rr.created_at desc limit 1)
+      end,
+    'request_kind', case when r.join_mode = 'open' then null
+      else (select rr.kind from public.room_requests rr
+        where rr.room_id = r.id
+          and rr.user_id = auth.uid()
+          and rr.status = 'pending'
+        order by rr.created_at desc limit 1)
+      end,
+    'request_creator_approved', case when r.join_mode = 'open' then null
+      else (select rr.creator_approved from public.room_requests rr
+        where rr.room_id = r.id
+          and rr.user_id = auth.uid()
+          and rr.status = 'pending'
+        order by rr.created_at desc limit 1)
+      end
   )
   from public.rooms r
   join public.profiles p on p.id = r.creator_id
@@ -917,13 +1002,14 @@ language plpgsql security definer
 set search_path = public, auth
 as $$
 declare
-  v_room_id uuid;
+  v_uid uuid := auth.uid();
+  v_room public.rooms%rowtype;
 begin
-  if auth.uid() is null then
+  if v_uid is null then
     raise exception 'You are not signed in.';
   end if;
 
-  select id into v_room_id
+  select * into v_room
   from public.rooms
   where code = upper(btrim(coalesce(p_code, '')));
 
@@ -931,7 +1017,40 @@ begin
     raise exception 'That invite link is not valid. Ask for a new one.';
   end if;
 
-  return public.request_join(v_room_id);
+  if public.is_room_member(v_room.id) then
+    return jsonb_build_object(
+      'status', 'member',
+      'room_id', v_room.id,
+      'room_name', v_room.name,
+      'code', v_room.code,
+      'join_mode', v_room.join_mode,
+      'open_to_all', v_room.open_to_all
+    );
+  end if;
+
+  -- Having the code is the link proof for both open modes.
+  if v_room.join_mode = 'open' then
+    insert into public.room_members (room_id, user_id, role)
+    values (v_room.id, v_uid, 'member')
+    on conflict (room_id, user_id) do nothing;
+
+    update public.room_requests
+    set status = 'accepted', responded_at = now()
+    where room_id = v_room.id and user_id = v_uid and status = 'pending';
+
+    update public.rooms set updated_at = now() where id = v_room.id;
+
+    return jsonb_build_object(
+      'status', 'member',
+      'room_id', v_room.id,
+      'room_name', v_room.name,
+      'code', v_room.code,
+      'join_mode', v_room.join_mode,
+      'open_to_all', v_room.open_to_all
+    );
+  end if;
+
+  return public.request_join(v_room.id);
 end;
 $$;
 
@@ -1262,7 +1381,7 @@ revoke all on function public.generate_room_code() from public, anon, authentica
 revoke all on function public.create_profile(text, text) from public, anon;
 revoke all on function public.change_handle(text) from public, anon;
 revoke all on function public.handle_available(text) from public, anon;
-revoke all on function public.create_room(text, public.room_visibility, public.room_join_mode, uuid[]) from public, anon;
+revoke all on function public.create_room(text, public.room_visibility, public.room_join_mode, boolean, uuid[]) from public, anon;
 revoke all on function public.search_rooms(text) from public, anon;
 revoke all on function public.room_details(uuid) from public, anon;
 revoke all on function public.room_access_preview(text) from public, anon;
@@ -1273,7 +1392,7 @@ revoke all on function public.request_join(uuid) from public, anon;
 revoke all on function public.respond_room_request(uuid, boolean) from public, anon;
 revoke all on function public.invite_member(uuid, text) from public, anon;
 revoke all on function public.remove_member(uuid, uuid) from public, anon;
-revoke all on function public.update_room(uuid, text, public.room_visibility, public.room_join_mode) from public, anon;
+revoke all on function public.update_room(uuid, text, public.room_visibility, public.room_join_mode, boolean) from public, anon;
 revoke all on function public.my_requests() from public, anon;
 revoke all on function public.room_pending_requests(uuid) from public, anon;
 revoke all on function public.send_message(uuid, text, boolean) from public, anon;
@@ -1293,7 +1412,7 @@ grant execute on function public.is_admin() to authenticated;
 grant execute on function public.create_profile(text, text) to authenticated;
 grant execute on function public.change_handle(text) to authenticated;
 grant execute on function public.handle_available(text) to authenticated;
-grant execute on function public.create_room(text, public.room_visibility, public.room_join_mode, uuid[]) to authenticated;
+grant execute on function public.create_room(text, public.room_visibility, public.room_join_mode, boolean, uuid[]) to authenticated;
 grant execute on function public.search_rooms(text) to authenticated;
 grant execute on function public.room_details(uuid) to authenticated;
 grant execute on function public.room_access_preview(text) to authenticated;
@@ -1304,7 +1423,7 @@ grant execute on function public.request_join(uuid) to authenticated;
 grant execute on function public.respond_room_request(uuid, boolean) to authenticated;
 grant execute on function public.invite_member(uuid, text) to authenticated;
 grant execute on function public.remove_member(uuid, uuid) to authenticated;
-grant execute on function public.update_room(uuid, text, public.room_visibility, public.room_join_mode) to authenticated;
+grant execute on function public.update_room(uuid, text, public.room_visibility, public.room_join_mode, boolean) to authenticated;
 grant execute on function public.my_requests() to authenticated;
 grant execute on function public.room_pending_requests(uuid) to authenticated;
 grant execute on function public.send_message(uuid, text, boolean) to authenticated;

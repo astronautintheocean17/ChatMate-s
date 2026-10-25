@@ -18,8 +18,7 @@ class ThemeToggleButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(100),
             onTap: themeController.toggle,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               decoration: BoxDecoration(
                 color: AppTheme.surface(context),
                 borderRadius: BorderRadius.circular(100),
@@ -48,8 +47,11 @@ class ThemeToggleButton extends StatelessWidget {
     );
   }
 
-  Widget _segment(BuildContext context,
-      {required IconData icon, required bool active}) {
+  Widget _segment(
+    BuildContext context, {
+    required IconData icon,
+    required bool active,
+  }) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 220),
       padding: const EdgeInsets.all(6),
@@ -60,9 +62,7 @@ class ThemeToggleButton extends StatelessWidget {
       child: Icon(
         icon,
         size: 16,
-        color: active
-            ? Colors.white
-            : AppTheme.textMuted(context),
+        color: active ? Colors.white : AppTheme.textMuted(context),
       ),
     );
   }

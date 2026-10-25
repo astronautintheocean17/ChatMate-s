@@ -37,6 +37,7 @@ class RoomSummary {
   final String code;
   final String visibility;
   final String joinMode;
+  final bool openToAll;
   final String creatorHandle;
   final String role;
   final int memberCount;
@@ -49,6 +50,7 @@ class RoomSummary {
     required this.code,
     required this.visibility,
     required this.joinMode,
+    required this.openToAll,
     required this.creatorHandle,
     required this.role,
     required this.memberCount,
@@ -58,7 +60,14 @@ class RoomSummary {
 
   bool get isCreator => role == 'creator';
   bool get isPrivate => visibility == 'private';
-  bool get isOpenJoin => joinMode == 'open';
+  bool get joinsInstantly => joinMode == 'open';
+  bool get isLinkOnly => joinMode == 'open' && !openToAll;
+  bool get isOpenToAll => joinMode == 'open' && openToAll;
+  String get accessMode => joinMode == 'request'
+      ? 'request'
+      : openToAll
+      ? 'all'
+      : 'link';
 
   factory RoomSummary.fromMap(Map<String, dynamic> map) => RoomSummary(
     id: map['id'] as String,
@@ -66,6 +75,7 @@ class RoomSummary {
     code: map['code'] as String,
     visibility: map['visibility'] as String,
     joinMode: _parseJoinMode(map['join_mode']),
+    openToAll: map['open_to_all'] == true,
     creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
     role: map['role'] as String? ?? 'member',
     memberCount: _parseInt(map['member_count']),
@@ -80,6 +90,7 @@ class RoomSearchResult {
   final String code;
   final String visibility;
   final String joinMode;
+  final bool openToAll;
   final String creatorHandle;
   final int memberCount;
   final bool isMember;
@@ -91,6 +102,7 @@ class RoomSearchResult {
     required this.code,
     required this.visibility,
     required this.joinMode,
+    required this.openToAll,
     required this.creatorHandle,
     required this.memberCount,
     required this.isMember,
@@ -98,8 +110,15 @@ class RoomSearchResult {
   });
 
   bool get isPrivate => visibility == 'private';
-  bool get isOpenJoin => joinMode == 'open';
+  bool get joinsInstantly => joinMode == 'open';
+  bool get isLinkOnly => joinMode == 'open' && !openToAll;
+  bool get isOpenToAll => joinMode == 'open' && openToAll;
   bool get isPending => requestStatus == 'pending';
+  String get accessMode => joinMode == 'request'
+      ? 'request'
+      : openToAll
+      ? 'all'
+      : 'link';
 
   factory RoomSearchResult.fromMap(Map<String, dynamic> map) =>
       RoomSearchResult(
@@ -108,6 +127,7 @@ class RoomSearchResult {
         code: map['code'] as String,
         visibility: map['visibility'] as String,
         joinMode: _parseJoinMode(map['join_mode']),
+        openToAll: map['open_to_all'] == true,
         creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
         memberCount: _parseInt(map['member_count']),
         isMember: map['is_member'] == true,
@@ -121,6 +141,7 @@ class RoomDetails {
   final String code;
   final String visibility;
   final String joinMode;
+  final bool openToAll;
   final String creatorId;
   final String creatorHandle;
   final int memberCount;
@@ -133,6 +154,7 @@ class RoomDetails {
     required this.code,
     required this.visibility,
     required this.joinMode,
+    required this.openToAll,
     required this.creatorId,
     required this.creatorHandle,
     required this.memberCount,
@@ -142,7 +164,14 @@ class RoomDetails {
 
   bool get isCreator => role == 'creator';
   bool get isPrivate => visibility == 'private';
-  bool get isOpenJoin => joinMode == 'open';
+  bool get joinsInstantly => joinMode == 'open';
+  bool get isLinkOnly => joinMode == 'open' && !openToAll;
+  bool get isOpenToAll => joinMode == 'open' && openToAll;
+  String get accessMode => joinMode == 'request'
+      ? 'request'
+      : openToAll
+      ? 'all'
+      : 'link';
 
   factory RoomDetails.fromMap(Map<String, dynamic> map) => RoomDetails(
     id: map['id'] as String,
@@ -150,6 +179,7 @@ class RoomDetails {
     code: map['code'] as String,
     visibility: map['visibility'] as String,
     joinMode: _parseJoinMode(map['join_mode']),
+    openToAll: map['open_to_all'] == true,
     creatorId: map['creator_id'] as String,
     creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
     memberCount: _parseInt(map['member_count']),
@@ -266,6 +296,7 @@ class RoomAccessPreview {
   final String code;
   final String visibility;
   final String joinMode;
+  final bool openToAll;
   final String creatorHandle;
   final int memberCount;
   final bool isMember;
@@ -279,6 +310,7 @@ class RoomAccessPreview {
     required this.code,
     required this.visibility,
     required this.joinMode,
+    required this.openToAll,
     required this.creatorHandle,
     required this.memberCount,
     required this.isMember,
@@ -288,10 +320,17 @@ class RoomAccessPreview {
   });
 
   bool get isPrivate => visibility == 'private';
-  bool get isOpenJoin => joinMode == 'open';
-  bool get isPending => requestStatus == 'pending';
+  bool get joinsInstantly => joinMode == 'open';
+  bool get isLinkOnly => joinMode == 'open' && !openToAll;
+  bool get isOpenToAll => joinMode == 'open' && openToAll;
+  bool get isPending => !joinsInstantly && requestStatus == 'pending';
   bool get needsCreatorApproval =>
       isPending && requestKind == 'invite' && !creatorApproved;
+  String get accessMode => joinMode == 'request'
+      ? 'request'
+      : openToAll
+      ? 'all'
+      : 'link';
 
   factory RoomAccessPreview.fromMap(Map<String, dynamic> map) =>
       RoomAccessPreview(
@@ -300,6 +339,7 @@ class RoomAccessPreview {
         code: map['code'] as String,
         visibility: map['visibility'] as String,
         joinMode: _parseJoinMode(map['join_mode']),
+        openToAll: map['open_to_all'] == true,
         creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
         memberCount: _parseInt(map['member_count']),
         isMember: map['is_member'] == true,

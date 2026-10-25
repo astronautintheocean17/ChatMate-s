@@ -203,9 +203,7 @@ class _RoomTile extends StatelessWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: accent),
-                ),
+                decoration: BoxDecoration(border: Border.all(color: accent)),
                 child: Text(
                   room.isPrivate ? 'PRIVATE' : 'PUBLIC',
                   style: AppText.mono(8, color: accent, ls: 1.0),
@@ -250,4 +248,3 @@ class _RoomTile extends StatelessWidget {
     );
   }
 }
-

@@ -75,7 +75,11 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
     }
     setState(() => _busy.add(room.id));
     try {
-      final response = await RoomService.requestJoin(room.id);
+      // Open-link rooms are never returned by name search, only by exact
+      // code. Treat that code exactly like the shared invite link.
+      final response = room.isLinkOnly
+          ? await RoomService.joinRoomByCode(room.code)
+          : await RoomService.requestJoin(room.id);
       final status = response['status'] as String? ?? 'pending';
       if (!mounted) return;
       setState(() => _statusOverride[room.id] = status);
@@ -85,9 +89,8 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              room.isPrivate
-                  ? 'Request sent to @${room.creatorHandle}.'
-                  : 'Join request sent. The creator must approve it.',
+              'Request sent to @${room.creatorHandle}. '
+              'The creator must approve it.',
             ),
           ),
         );
@@ -142,8 +145,8 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Search public rooms by name, or paste the six-character code '
-              'for a private one.',
+              'Search rooms that are open to all by name, or paste the '
+              'six-character code for a request-only or link-only room.',
               style: AppText.body(13, color: AppTheme.muted(context), h: 1.55),
             ),
             const SizedBox(height: 26),
@@ -179,8 +182,8 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
             const SizedBox(height: 10),
             Text(
               codeLike
-                  ? 'CODE FORMAT · PRIVATE ROOMS INCLUDED'
-                  : 'PUBLIC ROOMS · OR ENTER A FULL CODE',
+                  ? 'CODE FORMAT · REQUEST + LINK ROOMS INCLUDED'
+                  : 'OPEN-TO-ALL ROOMS · OR ENTER A FULL CODE',
               style: AppText.mono(8.5, color: AppTheme.muted(context), ls: 1.2),
             ),
             const SizedBox(height: 22),
@@ -200,7 +203,7 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
               _EmptyResults(query: _controller.text.trim())
             else ...[
               Text(
-                _searched ? 'MATCHES' : 'OPEN ROOMS',
+                _searched ? 'MATCHES' : 'OPEN-TO-ALL ROOMS',
                 style: AppText.mono(
                   9.5,
                   color: AppTheme.muted(context),
@@ -250,7 +253,19 @@ class _RoomResultTile extends StatelessWidget {
         ? 'OPEN'
         : pending
         ? 'REQUESTED'
+        : room.joinsInstantly
+        ? 'JOIN'
         : 'REQUEST';
+    final accessLabel = room.accessMode == 'request'
+        ? 'REQUEST ONLY'
+        : room.accessMode == 'link'
+        ? 'OPEN LINK'
+        : 'OPEN TO ALL';
+    final joinCopy = room.accessMode == 'request'
+        ? 'The creator approves every entry.'
+        : room.accessMode == 'link'
+        ? 'Join instantly with this code.'
+        : 'Anyone can join instantly.';
 
     return Material(
       color: AppTheme.surface(context),
@@ -270,8 +285,10 @@ class _RoomResultTile extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    room.isPrivate
+                    room.accessMode == 'request'
                         ? Icons.lock_outline_rounded
+                        : room.accessMode == 'link'
+                        ? Icons.link_rounded
                         : Icons.public_rounded,
                     size: 15,
                     color: AppTheme.muted(context),
@@ -299,7 +316,7 @@ class _RoomResultTile extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 '${room.memberCount} MEMBERS · BY @${room.creatorHandle}'
-                ' · ${room.isOpenJoin ? 'OPEN LINK' : 'REQUEST ONLY'}',
+                ' · $accessLabel',
                 style: AppText.mono(
                   8.5,
                   color: AppTheme.muted(context),
@@ -311,7 +328,7 @@ class _RoomResultTile extends StatelessWidget {
                 children: [
                   Expanded(
                     child: Text(
-                      'The creator approves every entry.',
+                      joinCopy,
                       style: AppText.body(11, color: AppTheme.muted(context)),
                     ),
                   ),
@@ -382,16 +399,16 @@ class _EmptyResults extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            query.isEmpty ? 'No public rooms yet.' : 'No room matches.',
+            query.isEmpty ? 'No open-to-all rooms yet.' : 'No room matches.',
             style: AppText.serif(21, color: AppTheme.ink(context)),
           ),
           const SizedBox(height: 6),
           Text(
             query.isEmpty
-                ? 'Private rooms never show up here. Ask for their code, or '
-                      'create the first public room.'
+                ? 'Request-only and link-only rooms stay out of search. Ask '
+                      'for their code or invite link.'
                 : 'Check the spelling, or paste the exact six-character code '
-                      'if you were invited to a private room.',
+                      'from your invite link.',
             style: AppText.body(12.5, color: AppTheme.muted(context), h: 1.5),
           ),
         ],

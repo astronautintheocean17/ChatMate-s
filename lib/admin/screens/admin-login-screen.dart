@@ -144,8 +144,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         labelText: 'Password',
                         labelStyle: AppText.body(12, color: muted),
                         suffixIcon: IconButton(
-                          onPressed: () =>
-                              setState(() => _obscure = !_obscure),
+                          onPressed: () => setState(() => _obscure = !_obscure),
                           icon: Icon(
                             _obscure
                                 ? Icons.visibility_outlined
@@ -208,4 +207,3 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     );
   }
 }
-

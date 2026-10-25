@@ -13,6 +13,7 @@ class RoomService {
     required String name,
     required String visibility,
     required String joinMode,
+    required bool openToAll,
     required List<String> memberIds,
   }) async {
     final result = await _client.rpc(
@@ -21,6 +22,7 @@ class RoomService {
         'p_name': name.trim(),
         'p_visibility': visibility,
         'p_join_mode': joinMode,
+        'p_open_to_all': openToAll,
         'p_member_ids': memberIds,
       },
     );
@@ -155,6 +157,7 @@ class RoomService {
     required String name,
     required String visibility,
     required String joinMode,
+    required bool openToAll,
   }) async {
     await _client.rpc(
       'update_room',
@@ -163,6 +166,7 @@ class RoomService {
         'p_name': name.trim(),
         'p_visibility': visibility,
         'p_join_mode': joinMode,
+        'p_open_to_all': openToAll,
       },
     );
   }

@@ -59,9 +59,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 
   void _open(Widget screen) {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => screen))
-        .then((_) => _refresh());
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => screen)).then((_) => _refresh());
   }
 
   @override
@@ -157,7 +157,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                       onTap: () => _open(const AdminUsersScreen()),
                     ),
                   ),
-                  if (wide) const SizedBox(width: 14) else const SizedBox(height: 14),
+                  if (wide)
+                    const SizedBox(width: 14)
+                  else
+                    const SizedBox(height: 14),
                   Expanded(
                     flex: wide ? 1 : 0,
                     child: _AdminCard(
@@ -172,9 +175,7 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
               const SizedBox(height: 34),
               Container(
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  border: Border.all(color: line),
-                ),
+                decoration: BoxDecoration(border: Border.all(color: line)),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -199,7 +200,6 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
   }
 }
 
-
 class _Stat extends StatelessWidget {
   final String label;
   final int value;
@@ -219,11 +219,7 @@ class _Stat extends StatelessWidget {
         children: [
           Text(
             label,
-            style: AppText.mono(
-              9,
-              color: AppTheme.muted(context),
-              ls: 1.4,
-            ),
+            style: AppText.mono(9, color: AppTheme.muted(context), ls: 1.4),
           ),
           const SizedBox(height: 8),
           Text(
@@ -307,4 +303,3 @@ class _ErrorLine extends StatelessWidget {
     );
   }
 }
-

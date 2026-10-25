@@ -24,7 +24,9 @@ class AuthService {
     final response = await client.auth.signInAnonymously();
     final user = response.user;
     if (user == null) {
-      throw Exception('Could not start a session. Is Anonymous sign-in enabled?');
+      throw Exception(
+        'Could not start a session. Is Anonymous sign-in enabled?',
+      );
     }
     return user;
   }

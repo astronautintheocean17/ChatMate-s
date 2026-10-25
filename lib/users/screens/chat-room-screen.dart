@@ -106,14 +106,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           event: 'message',
           callback: (_) => _refreshLatest(scroll: true),
         )
-        .onBroadcast(
-          event: 'typing',
-          callback: (_) => _showTyping(),
-        )
-        .onBroadcast(
-          event: 'seen',
-          callback: (_) => _refreshLatest(),
-        );
+        .onBroadcast(event: 'typing', callback: (_) => _showTyping())
+        .onBroadcast(event: 'seen', callback: (_) => _refreshLatest());
     channel.subscribe();
     _channel = channel;
   }
@@ -144,9 +138,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       final merged = byId.values.toList()
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
       final atBottom = !_scroll.hasClients || _scroll.offset < 80;
-      setState(() => _messages
-        ..clear()
-        ..addAll(merged));
+      setState(
+        () => _messages
+          ..clear()
+          ..addAll(merged),
+      );
       if (scroll || atBottom) _scrollToBottom();
       await _markRead(notify: hasNewIncoming);
     } catch (_) {
@@ -167,22 +163,22 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       );
       if (!mounted) return;
       final existing = {for (final message in _messages) message.id};
-      final fresh =
-          older.reversed.where((message) => !existing.contains(message.id));
+      final fresh = older.reversed.where(
+        (message) => !existing.contains(message.id),
+      );
       setState(() {
         _messages.insertAll(0, fresh);
         _hasMore = older.length >= 50;
       });
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyError(error))));
     } finally {
       if (mounted) setState(() => _loadingOlder = false);
     }
   }
-
 
   Future<void> _markRead({bool notify = false}) async {
     try {
@@ -259,10 +255,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (_) => RoomInfoSheet(
-        roomId: widget.roomId,
-        onChanged: _reloadRoom,
-      ),
+      builder: (_) =>
+          RoomInfoSheet(roomId: widget.roomId, onChanged: _reloadRoom),
     );
     if (mounted) _reloadRoom();
   }
@@ -275,7 +269,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       // Keep the last known room header if this refresh fails.
     }
   }
-
 
   Future<void> _showActions(ChatMessage message) async {
     final isCreator = _details?.isCreator ?? false;
@@ -318,10 +311,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   message.senderHandle == null
                       ? 'Sender stayed anonymous'
                       : 'Sender: @${message.senderHandle}',
-                  style: AppText.body(
-                    13.5,
-                    color: AppTheme.ink(sheetContext),
-                  ),
+                  style: AppText.body(13.5, color: AppTheme.ink(sheetContext)),
                 ),
               ),
             if (message.isMine)
@@ -329,10 +319,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 leading: const Icon(Icons.done_all_rounded, size: 20),
                 title: Text(
                   'Seen by',
-                  style: AppText.body(
-                    13.5,
-                    color: AppTheme.ink(sheetContext),
-                  ),
+                  style: AppText.body(13.5, color: AppTheme.ink(sheetContext)),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded, size: 18),
                 onTap: () {
@@ -398,12 +385,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyError(error))));
     }
   }
-
 
   Future<void> _confirmDelete(ChatMessage message) async {
     final confirmed = await showDialog<bool>(
@@ -417,11 +403,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         ),
         content: Text(
           'Everyone will see that a message was deleted, but the text is gone.',
-          style: AppText.body(
-            13,
-            color: AppTheme.muted(dialogContext),
-            h: 1.5,
-          ),
+          style: AppText.body(13, color: AppTheme.muted(dialogContext), h: 1.5),
         ),
         actions: [
           TextButton(
@@ -442,9 +424,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       await _broadcast('message');
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyError(error))));
     }
   }
 
@@ -472,7 +454,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               Text(
                 '${details.memberCount} '
                 '${details.memberCount == 1 ? 'member' : 'members'}'
-                ' · ${details.isPrivate ? 'PRIVATE' : 'PUBLIC'}',
+                ' · ${details.accessMode == 'request'
+                    ? 'REQUEST ONLY'
+                    : details.accessMode == 'link'
+                    ? 'OPEN LINK'
+                    : 'OPEN TO ALL'}',
                 style: AppText.mono(
                   8.5,
                   color: AppTheme.muted(context),
@@ -514,7 +500,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       children: [
         if (_error != null) _ErrorBanner(message: _error!),
         Expanded(
-          child: _messages.isEmpty ? _EmptyConversation(name: details?.name)
+          child: _messages.isEmpty
+              ? _EmptyConversation(name: details?.name)
               : RefreshIndicator(
                   color: AppTheme.accent(context),
                   onRefresh: () => _refreshLatest(),
@@ -530,8 +517,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           onTap: _loadOlder,
                         );
                       }
-                      final message =
-                          _messages[_messages.length - 1 - index];
+                      final message = _messages[_messages.length - 1 - index];
                       return _MessageBubble(
                         message: message,
                         onLongPress: () => _showActions(message),
@@ -554,8 +540,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 }
-
-
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
@@ -590,9 +574,7 @@ class _MessageBubble extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(13, 10, 9, 10),
           decoration: BoxDecoration(
             color: mine ? accent : AppTheme.surface(context),
-            border: Border.all(
-              color: mine ? accent : AppTheme.line(context),
-            ),
+            border: Border.all(color: mine ? accent : AppTheme.line(context)),
             borderRadius: BorderRadius.only(
               topLeft: const Radius.circular(14),
               topRight: const Radius.circular(14),
@@ -611,8 +593,8 @@ class _MessageBubble extends StatelessWidget {
                       mine
                           ? Icons.person_outline_rounded
                           : message.senderHandle == null
-                              ? Icons.visibility_off_outlined
-                              : Icons.alternate_email_rounded,
+                          ? Icons.visibility_off_outlined
+                          : Icons.alternate_email_rounded,
                       size: 11,
                       color: labelColor,
                     ),
@@ -622,17 +604,13 @@ class _MessageBubble extends StatelessWidget {
                       message.isDeleted
                           ? dayLabel(message.createdAt)
                           : mine
-                              ? 'YOU'
-                              : message.senderHandle == null
-                                  ? 'ANONYMOUS'
-                                  : '@${message.senderHandle}',
+                          ? 'YOU'
+                          : message.senderHandle == null
+                          ? 'ANONYMOUS'
+                          : '@${message.senderHandle}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppText.mono(
-                        8.5,
-                        color: labelColor,
-                        ls: 1.1,
-                      ),
+                      style: AppText.mono(8.5, color: labelColor, ls: 1.1),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -661,9 +639,10 @@ class _MessageBubble extends StatelessWidget {
               Text(
                 text,
                 style: message.isDeleted
-                    ? AppText.body(13.5, color: labelColor).copyWith(
-                        fontStyle: FontStyle.italic,
-                      )
+                    ? AppText.body(
+                        13.5,
+                        color: labelColor,
+                      ).copyWith(fontStyle: FontStyle.italic)
                     : AppText.body(14, color: foreground, h: 1.42),
               ),
               if (mine && !message.isDeleted && (message.seenCount ?? 0) > 0)
@@ -672,19 +651,11 @@ class _MessageBubble extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.done_all_rounded,
-                        size: 12,
-                        color: labelColor,
-                      ),
+                      Icon(Icons.done_all_rounded, size: 12, color: labelColor),
                       const SizedBox(width: 3),
                       Text(
                         '${message.seenCount} SEEN',
-                        style: AppText.mono(
-                          8,
-                          color: labelColor,
-                          ls: 0.8,
-                        ),
+                        style: AppText.mono(8, color: labelColor, ls: 0.8),
                       ),
                     ],
                   ),
@@ -859,7 +830,6 @@ class _Composer extends StatelessWidget {
   }
 }
 
-
 class _OlderButton extends StatelessWidget {
   const _OlderButton({required this.busy, required this.onTap});
 
@@ -882,11 +852,7 @@ class _OlderButton extends StatelessWidget {
               )
             : Text(
                 'LOAD EARLIER MESSAGES',
-                style: AppText.mono(
-                  9,
-                  color: AppTheme.accent(context),
-                  ls: 1,
-                ),
+                style: AppText.mono(9, color: AppTheme.accent(context), ls: 1),
               ),
       ),
     );
@@ -923,11 +889,7 @@ class _EmptyConversation extends StatelessWidget {
             Text(
               'Whatever is said here can stay anonymous. Say the thing.',
               textAlign: TextAlign.center,
-              style: AppText.body(
-                13,
-                color: AppTheme.muted(context),
-                h: 1.5,
-              ),
+              style: AppText.body(13, color: AppTheme.muted(context), h: 1.5),
             ),
           ],
         ),
@@ -989,20 +951,13 @@ class _FatalState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: AppText.body(
-                13,
-                color: AppTheme.muted(context),
-                h: 1.5,
-              ),
+              style: AppText.body(13, color: AppTheme.muted(context), h: 1.5),
             ),
             const SizedBox(height: 20),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                OutlinedButton(
-                  onPressed: onBack,
-                  child: const Text('BACK'),
-                ),
+                OutlinedButton(onPressed: onBack, child: const Text('BACK')),
                 const SizedBox(width: 10),
                 FilledButton(
                   onPressed: onRetry,
@@ -1016,4 +971,3 @@ class _FatalState extends StatelessWidget {
     );
   }
 }
-

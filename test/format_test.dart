@@ -12,7 +12,10 @@ void main() {
 
     test('relativeTime covers the short ranges', () {
       final now = DateTime.now();
-      expect(relativeTime(now.subtract(const Duration(seconds: 10))), 'just now');
+      expect(
+        relativeTime(now.subtract(const Duration(seconds: 10))),
+        'just now',
+      );
       expect(relativeTime(now.subtract(const Duration(minutes: 5))), '5m ago');
       expect(relativeTime(now.subtract(const Duration(hours: 3))), '3h ago');
     });
@@ -43,10 +46,7 @@ void main() {
       expect(message.revealSender, isTrue);
       expect(message.senderHandle, 'beta_02');
       expect(message.seenCount, 3);
-      expect(
-        message.createdAt.toUtc(),
-        DateTime.utc(2026, 10, 25, 10),
-      );
+      expect(message.createdAt.toUtc(), DateTime.utc(2026, 10, 25, 10));
     });
 
     test('handles a deleted anonymous message', () {

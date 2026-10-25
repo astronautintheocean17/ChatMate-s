@@ -37,8 +37,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
   bool _saving = false;
   bool _inviting = false;
   bool _nameInitialized = false;
-  String _visibility = 'public';
-  String _joinMode = 'request';
+  String _accessMode = 'request';
   String? _busyRequestId;
   String? _removingId;
   String? _error;
@@ -83,8 +82,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
         _error = null;
         if (!_nameInitialized) {
           _nameController.text = details.name;
-          _visibility = details.visibility;
-          _joinMode = details.joinMode;
+          _accessMode = details.accessMode;
           _nameInitialized = true;
         }
       });
@@ -145,8 +143,9 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
       await RoomService.updateRoom(
         roomId: widget.roomId,
         name: name,
-        visibility: _visibility,
-        joinMode: _joinMode,
+        visibility: _accessMode == 'request' ? 'private' : 'public',
+        joinMode: _accessMode == 'request' ? 'request' : 'open',
+        openToAll: _accessMode == 'all',
       );
       await _load(silent: true);
       widget.onChanged();
@@ -359,7 +358,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
                         _buildRoomSection(details),
                         const SizedBox(height: 18),
                         _buildCodeSection(details),
-                        if (details.isCreator || details.isOpenJoin) ...[
+                        if (details.isCreator || details.joinsInstantly) ...[
                           const SizedBox(height: 18),
                           _buildInviteSection(),
                         ],
@@ -449,15 +448,21 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
             Row(
               children: [
                 Icon(
-                  details.isPrivate
+                  details.accessMode == 'request'
                       ? Icons.lock_outline_rounded
+                      : details.accessMode == 'link'
+                      ? Icons.link_rounded
                       : Icons.public_rounded,
                   size: 14,
                   color: AppTheme.muted(context),
                 ),
                 const SizedBox(width: 5),
                 Text(
-                  '${details.isPrivate ? 'PRIVATE' : 'PUBLIC'} · '
+                  '${details.accessMode == 'request'
+                      ? 'PRIVATE · REQUEST ONLY'
+                      : details.accessMode == 'link'
+                      ? 'PUBLIC · OPEN LINK'
+                      : 'PUBLIC · OPEN TO ALL'} · '
                   '${details.memberCount} '
                   '${details.memberCount == 1 ? 'MEMBER' : 'MEMBERS'}',
                   style: AppText.mono(9, color: AppTheme.muted(context), ls: 1),
@@ -503,63 +508,43 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          _label('WHO CAN FIND IT'),
-          Row(
-            children: [
-              Expanded(
-                child: _visibilityOption(
-                  value: 'public',
-                  icon: Icons.public_rounded,
-                  label: 'PUBLIC',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _visibilityOption(
-                  value: 'private',
-                  icon: Icons.lock_outline_rounded,
-                  label: 'PRIVATE',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _visibility == 'private'
-                ? 'Hidden from name search. The code can find it, but joining '
-                      'always needs your approval.'
-                : 'Findable by name and code. People still need your approval '
-                      'before joining.',
-            style: AppText.body(11.5, color: AppTheme.muted(context), h: 1.45),
-          ),
-          const SizedBox(height: 16),
           _label('HOW PEOPLE JOIN'),
-          Row(
-            children: [
-              Expanded(
-                child: _joinModeOption(
-                  value: 'open',
-                  icon: Icons.link_rounded,
-                  label: 'OPEN LINK',
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _joinModeOption(
-                  value: 'request',
-                  icon: Icons.how_to_reg_rounded,
-                  label: 'REQUEST ONLY',
-                ),
-              ),
-            ],
+          _accessModeOption(
+            value: 'request',
+            icon: Icons.lock_outline_rounded,
+            label: 'REQUEST ONLY',
+            caption:
+                'Private. Hidden from search. People enter the room ID and '
+                'wait for your approval.',
+          ),
+          const SizedBox(height: 8),
+          _accessModeOption(
+            value: 'link',
+            icon: Icons.link_rounded,
+            label: 'OPEN LINK',
+            caption:
+                'Public link only. Not in search. Anyone with the link joins '
+                'immediately.',
+          ),
+          const SizedBox(height: 8),
+          _accessModeOption(
+            value: 'all',
+            icon: Icons.public_rounded,
+            label: 'OPEN TO ALL',
+            caption:
+                'Public. In search. Anyone can join immediately, with or '
+                'without the link.',
           ),
           const SizedBox(height: 8),
           Text(
-            _joinMode == 'open'
-                ? 'Anyone with the invite link can ask to join, and members can '
-                      'add people by ID. You verify every invite and request.'
-                : 'Only you can add people by ID. Link and code requests still '
-                      'come to you for approval.',
+            _accessMode == 'request'
+                ? 'Only you can add people by ID. Every join needs your '
+                      'approval.'
+                : _accessMode == 'link'
+                ? 'The room stays out of search. People with the link or code '
+                      'enter instantly.'
+                : 'The room appears in search. Anyone who finds it enters '
+                      'instantly.',
             style: AppText.body(11.5, color: AppTheme.muted(context), h: 1.45),
           ),
           const SizedBox(height: 14),
@@ -581,83 +566,65 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
     );
   }
 
-  Widget _visibilityOption({
+  Widget _accessModeOption({
     required String value,
     required IconData icon,
     required String label,
+    required String caption,
   }) {
-    final selected = _visibility == value;
+    final selected = _accessMode == value;
     final accent = AppTheme.accent(context);
     return InkWell(
-      onTap: () => setState(() => _visibility = value),
+      onTap: () => setState(() => _accessMode = value),
       borderRadius: BorderRadius.circular(8),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
         decoration: BoxDecoration(
           color: selected ? accent.withValues(alpha: 0.08) : Colors.transparent,
           border: Border.all(color: selected ? accent : AppTheme.line(context)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(
               icon,
-              size: 15,
+              size: 16,
               color: selected ? accent : AppTheme.muted(context),
             ),
-            const SizedBox(width: 7),
-            Text(
-              label,
-              style: AppText.mono(
-                9.5,
-                color: selected ? accent : AppTheme.muted(context),
-                ls: 1.2,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _joinModeOption({
-    required String value,
-    required IconData icon,
-    required String label,
-  }) {
-    final selected = _joinMode == value;
-    final accent = AppTheme.accent(context);
-    return InkWell(
-      onTap: () => setState(() => _joinMode = value),
-      borderRadius: BorderRadius.circular(8),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-        decoration: BoxDecoration(
-          color: selected ? accent.withValues(alpha: 0.08) : Colors.transparent,
-          border: Border.all(color: selected ? accent : AppTheme.line(context)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 15,
-              color: selected ? accent : AppTheme.muted(context),
-            ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Expanded(
-              child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.mono(
-                  8.5,
-                  color: selected ? accent : AppTheme.muted(context),
-                  ls: 0.8,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: AppText.mono(
+                      9,
+                      color: selected ? accent : AppTheme.ink(context),
+                      ls: 1,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    caption,
+                    style: AppText.body(
+                      10.5,
+                      color: AppTheme.muted(context),
+                      h: 1.35,
+                    ),
+                  ),
+                ],
               ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              size: 15,
+              color: selected ? accent : AppTheme.line(context),
             ),
           ],
         ),
@@ -687,9 +654,12 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
             ],
           ),
           Text(
-            details.isPrivate
+            details.accessMode == 'request'
                 ? 'Share the code or link. Every join needs your approval.'
-                : 'Anyone with this code or link can ask to join.',
+                : details.accessMode == 'link'
+                ? 'Share the code or link. People who have it join instantly.'
+                : 'Anyone with or without this code can find and join the '
+                      'room instantly.',
             style: AppText.body(11.5, color: AppTheme.muted(context)),
           ),
           const SizedBox(height: 12),

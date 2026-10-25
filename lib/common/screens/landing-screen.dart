@@ -999,9 +999,6 @@ class _RedactState extends State<_Redact> with SingleTickerProviderStateMixin {
   }
 */
 
-
-
-
 // DEEPSEEK'S
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -1032,41 +1029,38 @@ class _T {
     FontStyle style = FontStyle.normal,
     double h = 1.05,
     double ls = -0.5,
-  }) =>
-      GoogleFonts.fraunces(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        fontStyle: style,
-        height: h,
-        letterSpacing: ls,
-      );
+  }) => GoogleFonts.fraunces(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    fontStyle: style,
+    height: h,
+    letterSpacing: ls,
+  );
 
   static TextStyle body(
     double size, {
     Color color = _C.ink,
     FontWeight w = FontWeight.w400,
     double h = 1.55,
-  }) =>
-      GoogleFonts.interTight(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        height: h,
-      );
+  }) => GoogleFonts.interTight(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    height: h,
+  );
 
   static TextStyle mono(
     double size, {
     Color color = _C.muted,
     FontWeight w = FontWeight.w500,
     double ls = 1.2,
-  }) =>
-      GoogleFonts.jetBrainsMono(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        letterSpacing: ls,
-      );
+  }) => GoogleFonts.jetBrainsMono(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    letterSpacing: ls,
+  );
 }
 
 class LandingScreen extends StatefulWidget {
@@ -1082,9 +1076,9 @@ class _LandingScreenState extends State<LandingScreen> {
   final _wallKey = GlobalKey();
 
   void _goCreate() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const CreateIdScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const CreateIdScreen()));
   }
 
   void _scrollTo(GlobalKey key) {
@@ -1151,12 +1145,7 @@ class _LandingScreenState extends State<LandingScreen> {
               vPad: vPad,
               child: _finalCta(wide),
             ),
-            _Band(
-              color: _C.ink,
-              pad: pad,
-              vPad: 32,
-              child: _footer(wide),
-            ),
+            _Band(color: _C.ink, pad: pad, vPad: 32, child: _footer(wide)),
           ],
         ),
       ),
@@ -1209,8 +1198,12 @@ class _LandingScreenState extends State<LandingScreen> {
           alignment: Alignment.centerLeft,
           child: Text(
             'Sign nothing.',
-            style: _T.serif(headSize,
-                w: FontWeight.w400, style: FontStyle.italic, ls: -2),
+            style: _T.serif(
+              headSize,
+              w: FontWeight.w400,
+              style: FontStyle.italic,
+              ls: -2,
+            ),
           ),
         ),
         SizedBox(height: wide ? 36 : 28),
@@ -1335,11 +1328,13 @@ class _LandingScreenState extends State<LandingScreen> {
                 for (final word in words) ...[
                   Text(
                     word,
-                    style: _T.serif(24,
-                        color: _C.paperOnInk,
-                        w: FontWeight.w400,
-                        style: FontStyle.italic,
-                        ls: 0),
+                    style: _T.serif(
+                      24,
+                      color: _C.paperOnInk,
+                      w: FontWeight.w400,
+                      style: FontStyle.italic,
+                      ls: 0,
+                    ),
                   ),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 28),
@@ -1372,11 +1367,13 @@ class _LandingScreenState extends State<LandingScreen> {
               const TextSpan(text: 'A name makes people careful. '),
               TextSpan(
                 text: 'A mask makes them honest.',
-                style: _T.serif(wide ? 64 : 40,
-                    color: _C.accentBright,
-                    w: FontWeight.w400,
-                    style: FontStyle.italic,
-                    h: 1.08),
+                style: _T.serif(
+                  wide ? 64 : 40,
+                  color: _C.accentBright,
+                  w: FontWeight.w400,
+                  style: FontStyle.italic,
+                  h: 1.08,
+                ),
               ),
             ],
           ),
@@ -1398,12 +1395,21 @@ class _LandingScreenState extends State<LandingScreen> {
 
     final principles = Column(
       children: [
-        _principle('01', 'The sender is never exposed.',
-            'No name, no profile link, no trace on a message. Nobody can see who wrote it.'),
-        _principle('02', 'Identity is for belonging, not for messages.',
-            'Your ID gets you into rooms. It never travels with what you say.'),
-        _principle('03', 'Rooms keep it personal.',
-            'Each room is its own space — a class, a team, a friend group _ shared only with the people who belong in it.'),
+        _principle(
+          '01',
+          'The sender is never exposed.',
+          'No name, no profile link, no trace on a message. Nobody can see who wrote it.',
+        ),
+        _principle(
+          '02',
+          'Identity is for belonging, not for messages.',
+          'Your ID gets you into rooms. It never travels with what you say.',
+        ),
+        _principle(
+          '03',
+          'Rooms keep it personal.',
+          'Each room is its own space — a class, a team, a friend group _ shared only with the people who belong in it.',
+        ),
       ],
     );
 
@@ -1435,9 +1441,10 @@ class _LandingScreenState extends State<LandingScreen> {
         children: [
           Text(no, style: _T.mono(12, color: _C.accentBright, ls: 2)),
           const SizedBox(height: 12),
-          Text(title,
-              style:
-                  _T.serif(26, color: _C.paperOnInk, h: 1.15, ls: -0.3)),
+          Text(
+            title,
+            style: _T.serif(26, color: _C.paperOnInk, h: 1.15, ls: -0.3),
+          ),
           const SizedBox(height: 10),
           Text(desc, style: _T.body(15.5, color: _C.dimOnInk)),
         ],
@@ -1449,12 +1456,21 @@ class _LandingScreenState extends State<LandingScreen> {
 
   Widget _how(bool wide) {
     final steps = [
-      _step('01', 'Create your ID',
-          'Pick a username and set up your profile, the way you would on any social app. This is how you are found and added.'),
-      _step('02', 'Join or get added to rooms',
-          'A room is a dedicated chat for a group _ a class, a team, a circle of friends. Join one, or be added by someone already inside.'),
-      _step('03', 'Say it, unsigned',
-          'Write your message. It appears in the room with no name and no way to trace it back to you.'),
+      _step(
+        '01',
+        'Create your ID',
+        'Pick a username and set up your profile, the way you would on any social app. This is how you are found and added.',
+      ),
+      _step(
+        '02',
+        'Join or get added to rooms',
+        'A room is a dedicated chat for a group _ a class, a team, a circle of friends. Join one, or be added by someone already inside.',
+      ),
+      _step(
+        '03',
+        'Say it, unsigned',
+        'Write your message. It appears in the room with no name and no way to trace it back to you.',
+      ),
     ];
 
     return Column(
@@ -1502,10 +1518,12 @@ class _LandingScreenState extends State<LandingScreen> {
         children: [
           Text(
             no,
-            style: _T.serif(64,
-                color: _C.accent,
-                w: FontWeight.w300,
-                style: FontStyle.italic),
+            style: _T.serif(
+              64,
+              color: _C.accent,
+              w: FontWeight.w300,
+              style: FontStyle.italic,
+            ),
           ),
           const SizedBox(height: 20),
           Text(title, style: _T.serif(28, h: 1.15, ls: -0.3)),
@@ -1525,7 +1543,8 @@ class _LandingScreenState extends State<LandingScreen> {
         room: 'ROOM · BATCH 2024',
         time: 'YESTERDAY',
         name: 'Ananya R.',
-        body: 'I pretended to understand the project for three months. I never did.',
+        body:
+            'I pretended to understand the project for three months. I never did.',
         instant: true,
       ),
       _SlipCard(
@@ -1541,7 +1560,8 @@ class _LandingScreenState extends State<LandingScreen> {
         room: 'ROOM · STUDY GROUP',
         time: 'SUN · 8:12 PM',
         name: 'Meera N.',
-        body: 'We do not need another meeting. We need someone to start working.',
+        body:
+            'We do not need another meeting. We need someone to start working.',
         instant: true,
       ),
     ];
@@ -1570,9 +1590,7 @@ class _LandingScreenState extends State<LandingScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Transform.rotate(angle: -0.02, child: slips[0]),
-              ),
+              Expanded(child: Transform.rotate(angle: -0.02, child: slips[0])),
               const SizedBox(width: 28),
               Expanded(
                 child: Padding(
@@ -1617,8 +1635,7 @@ class _LandingScreenState extends State<LandingScreen> {
   Widget _finalCta(bool wide) {
     final headline = Text(
       'Make your ID.\nPick a room.\nSay it.',
-      style: _T.serif(wide ? 88 : 52,
-          color: _C.paperOnInk, h: 1.0, ls: -1.5),
+      style: _T.serif(wide ? 88 : 52, color: _C.paperOnInk, h: 1.0, ls: -1.5),
     );
 
     final action = Column(
@@ -1719,11 +1736,13 @@ class _Wordmark extends StatelessWidget {
       children: [
         Text(
           'ChatMate',
-          style: _T.serif(28,
-              color: light ? _C.paperOnInk : _C.ink,
-              w: FontWeight.w700,
-              ls: -1,
-              h: 1),
+          style: _T.serif(
+            28,
+            color: light ? _C.paperOnInk : _C.ink,
+            w: FontWeight.w700,
+            ls: -1,
+            h: 1,
+          ),
         ),
         const SizedBox(width: 3),
         const Padding(
@@ -1769,7 +1788,9 @@ class _GhostLink extends StatelessWidget {
         onTap: onTap,
         child: Text(
           label,
-          style: _T.body(16, w: FontWeight.w600).copyWith(
+          style: _T
+              .body(16, w: FontWeight.w600)
+              .copyWith(
                 decoration: TextDecoration.underline,
                 decorationColor: _C.accentBright,
                 decorationThickness: 2,
@@ -1827,15 +1848,22 @@ class _CtaButtonState extends State<_CtaButton> {
             children: [
               Text(
                 widget.label,
-                style: _T.body(widget.compact ? 14 : 16,
-                    color: fg, w: FontWeight.w600, h: 1.2),
+                style: _T.body(
+                  widget.compact ? 14 : 16,
+                  color: fg,
+                  w: FontWeight.w600,
+                  h: 1.2,
+                ),
               ),
               AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 width: _hover ? 16 : 8,
               ),
-              Icon(Icons.arrow_forward_rounded,
-                  size: widget.compact ? 16 : 18, color: fg),
+              Icon(
+                Icons.arrow_forward_rounded,
+                size: widget.compact ? 16 : 18,
+                color: fg,
+              ),
             ],
           ),
         ),
@@ -1882,18 +1910,24 @@ class _SlipCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   color: _C.ink,
-                  child: Text(tag,
-                      style: _T.mono(10, color: _C.paperOnInk, ls: 1.6)),
+                  child: Text(
+                    tag,
+                    style: _T.mono(10, color: _C.paperOnInk, ls: 1.6),
+                  ),
                 ),
                 Flexible(
                   child: Padding(
                     padding: const EdgeInsets.only(left: 8),
-                    child: Text(time,
-                        style: _T.mono(10.5),
-                        overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      time,
+                      style: _T.mono(10.5),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
@@ -1901,8 +1935,7 @@ class _SlipCard extends StatelessWidget {
             const SizedBox(height: 18),
             Text(
               body,
-              style:
-                  _T.serif(21, w: FontWeight.w400, h: 1.3, ls: -0.2),
+              style: _T.serif(21, w: FontWeight.w400, h: 1.3, ls: -0.2),
             ),
             const SizedBox(height: 20),
             Container(height: 1, color: _C.line),

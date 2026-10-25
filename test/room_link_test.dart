@@ -53,8 +53,9 @@ void main() {
         'id': 'room-1',
         'name': 'Sunday confessions',
         'code': 'AB12CD',
-        'visibility': 'private',
+        'visibility': 'public',
         'join_mode': 'open',
+        'open_to_all': false,
         'creator_id': 'user-1',
         'creator_handle': 'ALPHA',
         'member_count': 3,
@@ -63,7 +64,35 @@ void main() {
       });
 
       expect(details.joinMode, 'open');
-      expect(details.isOpenJoin, isTrue);
+      expect(details.joinsInstantly, isTrue);
+      expect(details.isLinkOnly, isTrue);
+      expect(details.accessMode, 'link');
+    });
+
+    test('RoomDetails distinguishes request-only and open-to-all rooms', () {
+      RoomDetails details(String mode, String visibility, bool openToAll) =>
+          RoomDetails.fromMap({
+            'id': 'room-1',
+            'name': 'Sunday confessions',
+            'code': 'AB12CD',
+            'visibility': visibility,
+            'join_mode': mode,
+            'open_to_all': openToAll,
+            'creator_id': 'user-1',
+            'creator_handle': 'alpha',
+            'member_count': 3,
+            'my_role': 'member',
+            'created_at': null,
+          });
+
+      final requestOnly = details('request', 'private', false);
+      expect(requestOnly.joinsInstantly, isFalse);
+      expect(requestOnly.accessMode, 'request');
+
+      final openToAll = details('open', 'public', true);
+      expect(openToAll.joinsInstantly, isTrue);
+      expect(openToAll.isOpenToAll, isTrue);
+      expect(openToAll.accessMode, 'all');
     });
 
     test('RoomRequestItem exposes invites awaiting creator verification', () {
@@ -90,8 +119,9 @@ void main() {
         'id': 'room-1',
         'name': 'Sunday confessions',
         'code': 'AB12CD',
-        'visibility': 'public',
-        'join_mode': 'open',
+        'visibility': 'private',
+        'join_mode': 'request',
+        'open_to_all': false,
         'creator_handle': 'ALPHA',
         'member_count': 3,
         'is_member': false,
@@ -104,13 +134,35 @@ void main() {
       expect(preview.needsCreatorApproval, isTrue);
     });
 
-    test('RoomAccessPreview distinguishes join requests from invites', () {
+    test('RoomAccessPreview ignores stale pending rows for open links', () {
       final preview = RoomAccessPreview.fromMap({
         'id': 'room-1',
         'name': 'Sunday confessions',
         'code': 'AB12CD',
         'visibility': 'public',
+        'join_mode': 'open',
+        'open_to_all': false,
+        'creator_handle': 'ALPHA',
+        'member_count': 3,
+        'is_member': false,
+        'request_status': 'pending',
+        'request_kind': 'join',
+        'request_creator_approved': false,
+      });
+
+      expect(preview.isPending, isFalse);
+      expect(preview.joinsInstantly, isTrue);
+      expect(preview.accessMode, 'link');
+    });
+
+    test('RoomAccessPreview distinguishes join requests from invites', () {
+      final preview = RoomAccessPreview.fromMap({
+        'id': 'room-1',
+        'name': 'Sunday confessions',
+        'code': 'AB12CD',
+        'visibility': 'private',
         'join_mode': 'request',
+        'open_to_all': false,
         'creator_handle': 'ALPHA',
         'member_count': 3,
         'is_member': false,
@@ -120,7 +172,7 @@ void main() {
       });
 
       expect(preview.isPending, isTrue);
-      expect(preview.isOpenJoin, isFalse);
+      expect(preview.joinsInstantly, isFalse);
       expect(preview.needsCreatorApproval, isFalse);
     });
   });

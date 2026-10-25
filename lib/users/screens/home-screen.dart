@@ -585,7 +585,11 @@ class _RoomTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Text(
-                      '${room.isPrivate ? 'PRIVATE' : 'PUBLIC'} · '
+                      '${room.accessMode == 'request'
+                          ? 'PRIVATE · REQUEST ONLY'
+                          : room.accessMode == 'link'
+                          ? 'PUBLIC · OPEN LINK'
+                          : 'PUBLIC · OPEN TO ALL'} · '
                       '${room.memberCount} MEMBERS'
                       '${room.isCreator ? ' · CREATOR' : ''}',
                       style: AppText.mono(

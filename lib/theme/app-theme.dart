@@ -25,15 +25,16 @@ class AppTheme {
     final base = ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.green,
-        brightness: Brightness.light,
-      ).copyWith(
-        primary: AppColors.greenDeep,
-        secondary: AppColors.green,
-        surface: AppColors.lightSurface,
-        onSurface: AppColors.lightText,
-      ),
+      colorScheme:
+          ColorScheme.fromSeed(
+            seedColor: AppColors.green,
+            brightness: Brightness.light,
+          ).copyWith(
+            primary: AppColors.greenDeep,
+            secondary: AppColors.green,
+            surface: AppColors.lightSurface,
+            onSurface: AppColors.lightText,
+          ),
       scaffoldBackgroundColor: AppColors.lightBg,
     );
     return base.copyWith(
@@ -56,15 +57,16 @@ class AppTheme {
     final base = ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.green,
-        brightness: Brightness.dark,
-      ).copyWith(
-        primary: AppColors.green,
-        secondary: AppColors.greenSoft,
-        surface: AppColors.darkSurface,
-        onSurface: AppColors.darkText,
-      ),
+      colorScheme:
+          ColorScheme.fromSeed(
+            seedColor: AppColors.green,
+            brightness: Brightness.dark,
+          ).copyWith(
+            primary: AppColors.green,
+            secondary: AppColors.greenSoft,
+            surface: AppColors.darkSurface,
+            onSurface: AppColors.darkText,
+          ),
       scaffoldBackgroundColor: AppColors.darkBg,
     );
     return base.copyWith(
@@ -89,20 +91,19 @@ class AppTheme {
 
   static Color border(BuildContext c) => Theme.of(c).dividerColor;
 
-  static Color text(BuildContext c) =>
-      Theme.of(c).brightness == Brightness.dark
-          ? AppColors.darkText
-          : AppColors.lightText;
+  static Color text(BuildContext c) => Theme.of(c).brightness == Brightness.dark
+      ? AppColors.darkText
+      : AppColors.lightText;
 
   static Color textMuted(BuildContext c) =>
       Theme.of(c).brightness == Brightness.dark
-          ? AppColors.darkTextMuted
-          : AppColors.lightTextMuted;
+      ? AppColors.darkTextMuted
+      : AppColors.lightTextMuted;
 
   static Color accent(BuildContext c) =>
       Theme.of(c).brightness == Brightness.dark
-          ? AppColors.green
-          : AppColors.greenDeep;
+      ? AppColors.green
+      : AppColors.greenDeep;
 
   static Color ink(BuildContext c) => text(c);
   static Color muted(BuildContext c) => textMuted(c);
@@ -117,39 +118,36 @@ class AppText {
     FontStyle style = FontStyle.normal,
     double h = 1.05,
     double ls = -0.5,
-  }) =>
-      GoogleFonts.fraunces(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        fontStyle: style,
-        height: h,
-        letterSpacing: ls,
-      );
+  }) => GoogleFonts.fraunces(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    fontStyle: style,
+    height: h,
+    letterSpacing: ls,
+  );
 
   static TextStyle body(
     double size, {
     Color? color,
     FontWeight w = FontWeight.w400,
     double h = 1.55,
-  }) =>
-      GoogleFonts.interTight(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        height: h,
-      );
+  }) => GoogleFonts.interTight(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    height: h,
+  );
 
   static TextStyle mono(
     double size, {
     Color? color,
     FontWeight w = FontWeight.w500,
     double ls = 1.2,
-  }) =>
-      GoogleFonts.jetBrainsMono(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        letterSpacing: ls,
-      );
+  }) => GoogleFonts.jetBrainsMono(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    letterSpacing: ls,
+  );
 }

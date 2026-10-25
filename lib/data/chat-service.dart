@@ -45,17 +45,11 @@ class ChatService {
   }
 
   static Future<void> delete(String messageId) async {
-    await _client.rpc(
-      'delete_message',
-      params: {'p_message_id': messageId},
-    );
+    await _client.rpc('delete_message', params: {'p_message_id': messageId});
   }
 
   static Future<void> markRead(String roomId) async {
-    await _client.rpc(
-      'mark_room_read',
-      params: {'p_room_id': roomId},
-    );
+    await _client.rpc('mark_room_read', params: {'p_room_id': roomId});
   }
 
   static Future<SeenReceipt> seenReceipt(String messageId) async {

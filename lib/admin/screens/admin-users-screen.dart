@@ -201,7 +201,10 @@ class _UserTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('@${user.handle}', style: AppText.body(14, color: ink)),
+                    Text(
+                      '@${user.handle}',
+                      style: AppText.body(14, color: ink),
+                    ),
                     const SizedBox(height: 3),
                     Text(
                       'joined ${shortDate(user.createdAt)}',
@@ -285,11 +288,7 @@ class _UserSheet extends StatelessWidget {
             width: 92,
             child: Text(
               label.toUpperCase(),
-              style: AppText.mono(
-                9,
-                color: AppTheme.muted(context),
-                ls: 1.0,
-              ),
+              style: AppText.mono(9, color: AppTheme.muted(context), ls: 1.0),
             ),
           ),
           Expanded(
@@ -327,4 +326,3 @@ class _InlineError extends StatelessWidget {
     );
   }
 }
-

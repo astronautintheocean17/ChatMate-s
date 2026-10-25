@@ -8,10 +8,10 @@ import '../../theme/app-theme.dart';
 import 'chat-room-screen.dart';
 import 'home-screen.dart';
 
-/// The ID-gated landing screen for a shared room link.
+/// The landing screen for a shared room link.
 ///
-/// Nobody is admitted from the link itself. The link only lets a signed-in
-/// person ask the creator for access (or open a room they already belong to).
+/// Request-only rooms create a pending request. Open-link and open-to-all
+/// rooms admit the signed-in person immediately.
 class RoomInviteScreen extends StatefulWidget {
   const RoomInviteScreen({super.key, required this.code});
 
@@ -195,13 +195,18 @@ class _RoomInviteScreenState extends State<RoomInviteScreen> {
     final pending = preview.isPending;
     final primaryLabel = preview.isMember
         ? 'OPEN ROOM'
+        : preview.joinsInstantly
+        ? 'JOIN ROOM'
         : pending
         ? awaitingCreator
               ? 'WAITING FOR CREATOR'
               : 'BACK TO CHATMATE'
-        : preview.isOpenJoin
-        ? 'ASK TO JOIN'
         : 'REQUEST TO JOIN';
+    final accessLabel = preview.accessMode == 'request'
+        ? 'PRIVATE · REQUEST ONLY'
+        : preview.accessMode == 'link'
+        ? 'PUBLIC · OPEN LINK'
+        : 'PUBLIC · OPEN TO ALL';
 
     return Container(
       width: double.infinity,
@@ -217,16 +222,17 @@ class _RoomInviteScreenState extends State<RoomInviteScreen> {
           Row(
             children: [
               Icon(
-                preview.isPrivate
+                preview.accessMode == 'request'
                     ? Icons.lock_outline_rounded
+                    : preview.accessMode == 'link'
+                    ? Icons.link_rounded
                     : Icons.public_rounded,
                 size: 14,
                 color: AppTheme.muted(context),
               ),
               const SizedBox(width: 6),
               Text(
-                '${preview.isPrivate ? 'PRIVATE' : 'PUBLIC'} · '
-                '${preview.isOpenJoin ? 'OPEN LINK' : 'REQUEST ONLY'}',
+                accessLabel,
                 style: AppText.mono(9, color: AppTheme.muted(context), ls: 1),
               ),
               const Spacer(),
@@ -345,8 +351,11 @@ class _RoomInviteScreenState extends State<RoomInviteScreen> {
           ],
           const SizedBox(height: 5),
           Text(
-            'Access is approved by the room creator. A link never bypasses '
-            'that.',
+            preview.joinsInstantly
+                ? 'This room lets people in immediately from its link. '
+                      'No creator approval is needed.'
+                : 'This room is request-only. The creator decides who gets '
+                      'in.',
             style: AppText.body(10.5, color: AppTheme.muted(context), h: 1.4),
           ),
         ],
@@ -369,10 +378,13 @@ class _RoomInviteScreenState extends State<RoomInviteScreen> {
           : 'Your request is with the room creator. You get in only after '
                 'they approve it.';
     }
-    return preview.isOpenJoin
-        ? 'This room accepts link requests. Ask to join and the creator will '
-              'decide.'
-        : 'This room asks people to request access. The creator will decide '
-              'whether to let you in.';
+    return preview.isLinkOnly
+        ? 'This room is open to anyone who has its link. Join now — no '
+              'creator approval needed.'
+        : preview.isOpenToAll
+        ? 'This room is open to everyone. Join now — no link or approval '
+              'needed.'
+        : 'This room is request-only. The creator will decide whether to let '
+              'you in.';
   }
 }

@@ -46,10 +46,7 @@ class _ExistingRoomsScreenState extends State<ExistingRoomsScreen> {
   Future<void> _open(RoomSummary room) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ChatRoomScreen(
-          roomId: room.id,
-          roomName: room.name,
-        ),
+        builder: (_) => ChatRoomScreen(roomId: room.id, roomName: room.name),
       ),
     );
     if (mounted) _load();
@@ -72,11 +69,7 @@ class _ExistingRoomsScreenState extends State<ExistingRoomsScreen> {
         ),
         title: Text(
           'YOUR ROOMS',
-          style: AppText.mono(
-            10,
-            color: AppTheme.muted(context),
-            ls: 1.8,
-          ),
+          style: AppText.mono(10, color: AppTheme.muted(context), ls: 1.8),
         ),
         centerTitle: false,
         actions: [
@@ -98,11 +91,7 @@ class _ExistingRoomsScreenState extends State<ExistingRoomsScreen> {
             children: [
               Text(
                 'Every room\nkept here.',
-                style: AppText.serif(
-                  36,
-                  color: AppTheme.ink(context),
-                  h: 0.98,
-                ),
+                style: AppText.serif(36, color: AppTheme.ink(context), h: 0.98),
               ),
               const SizedBox(height: 12),
               Text(
@@ -117,10 +106,7 @@ class _ExistingRoomsScreenState extends State<ExistingRoomsScreen> {
               if (_error != null) ...[
                 Text(
                   _error!,
-                  style: AppText.body(
-                    12,
-                    color: AppTheme.accent(context),
-                  ),
+                  style: AppText.body(12, color: AppTheme.accent(context)),
                 ),
                 const SizedBox(height: 14),
               ],
@@ -135,9 +121,7 @@ class _ExistingRoomsScreenState extends State<ExistingRoomsScreen> {
                 _EmptyLibrary(
                   onJoin: () async {
                     await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const JoinRoomScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const JoinRoomScreen()),
                     );
                     if (mounted) _load();
                   },
@@ -149,10 +133,7 @@ class _ExistingRoomsScreenState extends State<ExistingRoomsScreen> {
                   ...created.map(
                     (room) => Padding(
                       padding: const EdgeInsets.only(bottom: 9),
-                      child: _LibraryTile(
-                        room: room,
-                        onTap: () => _open(room),
-                      ),
+                      child: _LibraryTile(room: room, onTap: () => _open(room)),
                     ),
                   ),
                   const SizedBox(height: 18),
@@ -163,10 +144,7 @@ class _ExistingRoomsScreenState extends State<ExistingRoomsScreen> {
                   ...joined.map(
                     (room) => Padding(
                       padding: const EdgeInsets.only(bottom: 9),
-                      child: _LibraryTile(
-                        room: room,
-                        onTap: () => _open(room),
-                      ),
+                      child: _LibraryTile(room: room, onTap: () => _open(room)),
                     ),
                   ),
                 ],
@@ -179,7 +157,6 @@ class _ExistingRoomsScreenState extends State<ExistingRoomsScreen> {
   }
 }
 
-
 class _LibraryLabel extends StatelessWidget {
   const _LibraryLabel(this.text);
 
@@ -189,11 +166,7 @@ class _LibraryLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: AppText.mono(
-        9,
-        color: AppTheme.muted(context),
-        ls: 1.4,
-      ),
+      style: AppText.mono(9, color: AppTheme.muted(context), ls: 1.4),
     );
   }
 }
@@ -258,7 +231,11 @@ class _LibraryTile extends StatelessWidget {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      '${room.isPrivate ? 'PRIVATE' : 'PUBLIC'} · '
+                      '${room.accessMode == 'request'
+                          ? 'PRIVATE · REQUEST ONLY'
+                          : room.accessMode == 'link'
+                          ? 'PUBLIC · OPEN LINK'
+                          : 'PUBLIC · OPEN TO ALL'} · '
                       '${room.memberCount} MEMBERS'
                       '${room.lastMessageAt == null ? '' : ' · ${relativeTime(room.lastMessageAt)}'}',
                       style: AppText.mono(
@@ -322,20 +299,12 @@ class _EmptyLibrary extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Rooms you create or are accepted into will be listed here.',
-            style: AppText.body(
-              12.5,
-              color: AppTheme.muted(context),
-              h: 1.5,
-            ),
+            style: AppText.body(12.5, color: AppTheme.muted(context), h: 1.5),
           ),
           const SizedBox(height: 12),
-          TextButton(
-            onPressed: onJoin,
-            child: const Text('FIND A ROOM'),
-          ),
+          TextButton(onPressed: onJoin, child: const Text('FIND A ROOM')),
         ],
       ),
     );
   }
 }
-

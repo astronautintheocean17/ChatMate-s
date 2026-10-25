@@ -9,8 +9,7 @@ class ProfileService {
 
   static SupabaseClient get _client => AuthService.client;
 
-  static String normalizeHandle(String value) =>
-      value.trim().toLowerCase();
+  static String normalizeHandle(String value) => value.trim().toLowerCase();
 
   static bool isValidHandle(String value) =>
       RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(normalizeHandle(value));
@@ -53,16 +52,11 @@ class ProfileService {
     return Profile.fromMap(Map<String, dynamic>.from(result as Map));
   }
 
-  static Future<List<Profile>> search(
-    String query, {
-    int limit = 30,
-  }) async {
+  static Future<List<Profile>> search(String query, {int limit = 30}) async {
     final term = query.trim().toLowerCase();
     final userId = AuthService.currentUserId;
 
-    var request = _client
-        .from('profiles')
-        .select('id, handle, display_name');
+    var request = _client.from('profiles').select('id, handle, display_name');
     if (term.isNotEmpty) {
       request = request.ilike('handle', '%$term%');
     }

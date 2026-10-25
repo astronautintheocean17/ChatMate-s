@@ -2,7 +2,7 @@
 
 **Every room has a secret. Say it. Sign nothing.**
 
-<img src="assets/logo/ChatMate-logo.png" alt="ChatMate — Where truths unravel." width="180" align="right">
+<img src="web/favicon.svg" alt="ChatMate — Where truths unravel." width="180" align="right">
 
 ChatMate is anonymous room chat for students, teams, hostels, friend groups
 and anyone who needs a private place to speak honestly. Create an ID, join the
@@ -19,8 +19,8 @@ belonging from speaking: your ID gets you into a room, but it never travels
 with the messages you send. Every room is its own circle, with its own people,
 its own code and its own secrets.
 
-- Create a public or private room in seconds.
-- Join by search or with a six-character room code.
+- Create a request-only, open-link or open-to-all room in seconds.
+- Join by search, invite link or six-character room code.
 - Invite people directly; they accept before they enter.
 - Send, reply, react, edit and delete — always without a sender attached.
 - Reveal your handle only when you deliberately choose to.
@@ -92,7 +92,8 @@ flutter build web
 ```
 
 The app targets Flutter with Supabase Auth/Postgres/Realtime. See
-`supabase/0001_init.sql`, `supabase/0002_invite_links.sql` and
-`supabase/SETUP.md` for the backend contract. Use `0002_invite_links.sql` when
-upgrading an existing Supabase project.
+`supabase/0001_init.sql`, `supabase/0002_invite_links.sql`,
+`supabase/0003_three_join_modes.sql` and `supabase/SETUP.md` for the backend
+contract. Existing Supabase projects must run `0002` and then `0003`; projects
+that already ran `0002` only need `0003`.
 

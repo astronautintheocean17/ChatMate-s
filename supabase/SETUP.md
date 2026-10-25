@@ -59,22 +59,27 @@ Also confirm **Email** provider is enabled (it is by default). The admin uses it
 
 ### Existing ChatMate project (already has tables)
 
-1. Open **SQL Editor** → **New query**.
-2. Open `supabase/0002_invite_links.sql`, copy **all** of it.
-3. Paste and click **Run**. This is the only file needed for the current
-   invite-link / join-mode upgrade.
+Run these two files **in order**, each in a new SQL Editor query:
 
-`0002_invite_links.sql` adds `rooms.join_mode`,
-`room_requests.creator_approved`, and the current room RPCs
-(`room_access_preview`, `join_room_by_code`, and the updated
-create/invite/request functions). It is safe to run more than once.
+1. `supabase/0002_invite_links.sql`
+2. `supabase/0003_three_join_modes.sql`
+
+If you already ran `0002`, you only need `0003`. Both files are safe to run more
+than once. `0003` adds `rooms.open_to_all` and replaces the room RPCs so the
+three modes behave exactly as labelled:
+
+| Mode | Search | Joining |
+|---|---|---|
+| **Request only** | Hidden; exact code/ID only | Creates a pending request; creator approves |
+| **Open link** | Hidden; exact code/link only | Joins instantly; no approval |
+| **Open to all** | Findable by name or code | Joins instantly; no approval |
 
 What the tables contain:
 
 | Table | Purpose |
 |---|---|
 | `profiles` | one unique handle per auth user |
-| `rooms` | name, unique 6-character code, public/private, open/request join mode |
+| `rooms` | name, unique 6-character code, visibility, join mode, `open_to_all` |
 | `room_members` | membership + last-read timestamp |
 | `room_requests` | creator-verified invites + creator-approved join requests |
 | `messages` | message text, optional reveal flag, soft delete |
@@ -84,9 +89,14 @@ All writes go through `security definer` RPCs. The `messages` and
 `message_reads` tables cannot be read directly by the app at all, so a modified
 client still cannot recover a hidden sender.
 
-For an existing project, running `0002_invite_links.sql` is enough. A fresh
-project should run `0001_init.sql`, which already contains the same columns and
-functions in the full initial schema.
+A fresh project should run `0001_init.sql`; it already contains the same columns
+and functions, so `0003` is not needed after a fresh install.
+
+When upgrading, any existing room whose old mode was **open** becomes an
+**Open link** room: it joins instantly and stops appearing in name search. Any
+old **request** room becomes **Request only** and stays private. Any pending
+request from the old room is accepted automatically when that person next uses
+the room's link.
 
 ---
 
@@ -157,26 +167,33 @@ placeholder from step 5.
 
 Use two browsers / two devices (or one normal + one incognito).
 
-1. Device A: create ID `alpha_01`, create a **public** room, invite nobody.
+1. Device A: create ID `alpha_01`, create an **Open to all** room, invite
+   nobody.
 2. Device B: create ID `beta_02`, Join a Room, search the room name or its
-   6-character code → **REQUEST TO JOIN**.
-3. Device A: open the room → info (top-right) → **INVITES & REQUESTS** → Accept.
+   6-character code → **JOIN**. It opens immediately; no approval.
+3. Device A: open the room → info (top-right) → **INVITES & REQUESTS**. There
+   should be nothing pending.
 4. Device B: the room appears in **Your Rooms**; open it and chat.
 5. Send from B with **Reveal me** OFF → A sees no handle, and the three-dot
    menu says "Sender stayed anonymous".
 6. Send with **Reveal me** ON → A can tap the three dots → "Sender: @beta_02".
 7. A taps three dots on their own message → **Seen by** → count only, no names.
 8. Start typing on B → A sees "Someone is typing something…".
-9. A creates a **private** room and invites B by handle → B gets it in
+9. A creates a **Request only** room and invites B by handle → B gets it in
    **REQUESTS** → accept → room appears.
-10. A opens room info → **SHARE INVITE LINK** → copy. In a private/incognito
-    window, open the link → create a new ChatMate ID → **REQUEST TO JOIN**.
-    A must verify/approve it in **INVITES & REQUESTS** before that person gets
-    access. A link never bypasses creator approval.
-11. A opens room info and switches **OPEN LINK / REQUEST ONLY**. In open mode,
-    any member can add someone by ID, but A still verifies the invite. In
-    request-only mode, only A can add people by ID.
-12. Admin link → `yourdad` / `nowaytoguess69` → Users / Rooms → open any room in
+10. A opens a **Request only** room's info → **SHARE INVITE LINK** → copy. In a
+    private/incognito window, open the link → create a new ChatMate ID →
+    **REQUEST TO JOIN**. A must approve it in **INVITES & REQUESTS** before
+    that person gets access.
+11. A creates an **Open link** room → copy its link. Search its exact name in
+    Join a Room: it must not appear. Open the link in another window → **JOIN
+    ROOM** works immediately with no approval.
+12. A creates an **Open to all** room → it appears in Join a Room by name, and
+    anyone can tap **JOIN** immediately.
+13. A opens room info and switches between **REQUEST ONLY / OPEN LINK / OPEN TO
+    ALL**. The search and instant/pending behavior must match the selected
+    label exactly.
+14. Admin link → `yourdad` / `nowaytoguess69` → Users / Rooms → open any room in
     ghost mode. Anonymous senders stay anonymous.
 
 Permission checks to try (they should all fail):
@@ -193,14 +210,15 @@ Permission checks to try (they should all fail):
 - **Anonymous session = this device.** If the app is uninstalled or browser
   storage is cleared, the identity cannot be recovered. There is no logout for
   normal users, as requested. Changing the handle is possible in Profile.
-- **Private rooms** are hidden from name search. They can still be found by
-  their exact 6-character code or an invite link, but joining always needs
-  creator approval. Invited users also need to accept before they become
-  members.
-- **Open link rooms** let any member add someone by ChatMate ID, but the creator
-  verifies that invite before the invited person can accept. **Request-only
-  rooms** limit adding by ID to the creator. In both modes, every link/code join
-  is a request until the creator approves it.
+- **Request-only rooms** are private and hidden from name search. They can be
+  found by exact 6-character code or invite link, but every join is a request
+  until the creator approves it. Only the creator can add people by ChatMate ID.
+- **Open link rooms** are public but hidden from name search. Anyone with the
+  exact link or code joins instantly; no approval is needed. Any member can add
+  someone by ChatMate ID, but that direct invite still needs creator
+  verification before the invited person accepts.
+- **Open to all rooms** are public and searchable. Anyone can join instantly by
+  name/search, link or code; no approval is needed.
 - **First member to open a room** marks existing messages read. Seen counts are
   per message and sender-only.
 - **Realtime channels** for messages/typing use signal-only payloads

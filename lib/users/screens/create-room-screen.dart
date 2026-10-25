@@ -21,11 +21,14 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
   final Map<String, Profile?> _invited = {};
   List<Profile> _suggestions = const [];
   Timer? _debounce;
-  String _visibility = 'private';
-  String _joinMode = 'request';
+  String _accessMode = 'request';
   bool _creating = false;
   bool _searching = false;
   String? _error;
+
+  String get _visibility => _accessMode == 'request' ? 'private' : 'public';
+  String get _joinMode => _accessMode == 'request' ? 'request' : 'open';
+  bool get _openToAll => _accessMode == 'all';
 
   @override
   void dispose() {
@@ -111,6 +114,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
         name: name,
         visibility: _visibility,
         joinMode: _joinMode,
+        openToAll: _openToAll,
         memberIds: memberIds,
       );
 
@@ -198,62 +202,47 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
               ),
             ),
             const SizedBox(height: 26),
-            const _SectionLabel('WHO CAN FIND IT'),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _VisibilityCard(
-                    title: 'Private',
-                    caption: 'Code only. Public search skips it.',
-                    icon: Icons.lock_outline_rounded,
-                    selected: _visibility == 'private',
-                    onTap: () => setState(() => _visibility = 'private'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _VisibilityCard(
-                    title: 'Public',
-                    caption: 'Findable by name. Approval still required.',
-                    icon: Icons.public_rounded,
-                    selected: _visibility == 'public',
-                    onTap: () => setState(() => _visibility = 'public'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
             const _SectionLabel('HOW PEOPLE JOIN'),
             const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _JoinModeOption(
-                    title: 'Open link',
-                    caption: 'Members can add people. You verify every ask.',
-                    icon: Icons.link_rounded,
-                    selected: _joinMode == 'open',
-                    onTap: () => setState(() => _joinMode = 'open'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _JoinModeOption(
-                    title: 'Request only',
-                    caption:
-                        'Only you can add people. Link asks still reach you.',
-                    icon: Icons.how_to_reg_rounded,
-                    selected: _joinMode == 'request',
-                    onTap: () => setState(() => _joinMode = 'request'),
-                  ),
-                ),
-              ],
+            _JoinModeOption(
+              title: 'Request only',
+              caption:
+                  'Private. Hidden from search. Someone enters the room ID, '
+                  'sends a request, and waits for your approval.',
+              icon: Icons.lock_outline_rounded,
+              selected: _accessMode == 'request',
+              onTap: () => setState(() => _accessMode = 'request'),
+            ),
+            const SizedBox(height: 8),
+            _JoinModeOption(
+              title: 'Open link',
+              caption:
+                  'Public link only. Not in search. Anyone with the invite '
+                  'link joins immediately — no approval needed.',
+              icon: Icons.link_rounded,
+              selected: _accessMode == 'link',
+              onTap: () => setState(() => _accessMode = 'link'),
+            ),
+            const SizedBox(height: 8),
+            _JoinModeOption(
+              title: 'Open to all',
+              caption:
+                  'Public. Findable in search. Anyone can join immediately '
+                  'with the link or without it — no approval needed.',
+              icon: Icons.public_rounded,
+              selected: _accessMode == 'all',
+              onTap: () => setState(() => _accessMode = 'all'),
             ),
             const SizedBox(height: 8),
             Text(
-              'Either way, you approve every person before they can open the '
-              'room.',
+              _accessMode == 'request'
+                  ? 'Only you can add people by ID. Every join needs your '
+                        'approval.'
+                  : _accessMode == 'link'
+                  ? 'The room stays out of search. Share its link or code; '
+                        'people who have it enter instantly.'
+                  : 'The room is in search. Anyone who finds it can enter '
+                        'instantly, no link needed.',
               style: AppText.body(
                 11.5,
                 color: AppTheme.muted(context),
@@ -375,8 +364,9 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'PRIVATE ROOMS ARE HIDDEN FROM SEARCH. EVERY ROOM GETS A '
-              'SHAREABLE LINK AND CODE. YOU APPROVE EVERY ENTRY.',
+              'REQUEST-ONLY AND OPEN-LINK ROOMS ARE HIDDEN FROM SEARCH. '
+              'OPEN-TO-ALL ROOMS ARE SEARCHABLE. EVERY ROOM GETS A SHAREABLE '
+              'LINK AND CODE.',
               style: AppText.mono(8, color: AppTheme.muted(context), ls: 1.2),
             ),
           ],
@@ -474,77 +464,6 @@ class _JoinModeOption extends StatelessWidget {
                     : Icons.radio_button_off_rounded,
                 size: 15,
                 color: selected ? accent : AppTheme.line(context),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _VisibilityCard extends StatelessWidget {
-  const _VisibilityCard({
-    required this.title,
-    required this.caption,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String title;
-  final String caption;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = AppTheme.accent(context);
-    return Material(
-      color: selected
-          ? accent.withValues(alpha: 0.06)
-          : AppTheme.surface(context),
-      borderRadius: BorderRadius.circular(10),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: selected ? accent : AppTheme.line(context),
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    icon,
-                    size: 18,
-                    color: selected ? accent : AppTheme.muted(context),
-                  ),
-                  const Spacer(),
-                  if (selected)
-                    Icon(Icons.check_circle_rounded, size: 15, color: accent),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                title,
-                style: AppText.serif(18, color: AppTheme.ink(context)),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                caption,
-                style: AppText.body(
-                  10.5,
-                  color: AppTheme.muted(context),
-                  h: 1.4,
-                ),
               ),
             ],
           ),

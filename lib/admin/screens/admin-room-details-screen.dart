@@ -12,8 +12,7 @@ class AdminRoomDetailsScreen extends StatefulWidget {
   const AdminRoomDetailsScreen({super.key, required this.roomId});
 
   @override
-  State<AdminRoomDetailsScreen> createState() =>
-      _AdminRoomDetailsScreenState();
+  State<AdminRoomDetailsScreen> createState() => _AdminRoomDetailsScreenState();
 }
 
 class _AdminRoomDetailsScreenState extends State<AdminRoomDetailsScreen> {
@@ -59,10 +58,7 @@ class _AdminRoomDetailsScreenState extends State<AdminRoomDetailsScreen> {
                         style: AppText.body(13, color: muted),
                       ),
                       const SizedBox(height: 12),
-                      TextButton(
-                        onPressed: _load,
-                        child: const Text('RETRY'),
-                      ),
+                      TextButton(onPressed: _load, child: const Text('RETRY')),
                     ],
                   ),
                 ),
@@ -185,7 +181,6 @@ class _AdminRoomDetailsScreenState extends State<AdminRoomDetailsScreen> {
   }
 }
 
-
 class _MembersTab extends StatelessWidget {
   final List<Map<String, dynamic>> members;
   const _MembersTab({required this.members});
@@ -202,9 +197,7 @@ class _MembersTab extends StatelessWidget {
       itemBuilder: (_, index) {
         final member = members[index];
         final role = member['role'] as String? ?? 'member';
-        final joined = DateTime.tryParse(
-          member['joined_at'] as String? ?? '',
-        );
+        final joined = DateTime.tryParse(member['joined_at'] as String? ?? '');
         return _RowCard(
           leading: '@${member['handle']}',
           meta: 'joined ${shortDate(joined)}',
@@ -243,7 +236,6 @@ class _RequestsTab extends StatelessWidget {
     );
   }
 }
-
 
 class _MessagesTab extends StatelessWidget {
   final List<Map<String, dynamic>> messages;
@@ -295,8 +287,8 @@ class _MessageCard extends StatelessWidget {
                   deleted
                       ? 'DELETED'
                       : handle != null
-                          ? '@$handle'
-                          : 'ANONYMOUS SENDER',
+                      ? '@$handle'
+                      : 'ANONYMOUS SENDER',
                   style: AppText.mono(
                     9,
                     color: handle != null ? ink : muted,
@@ -326,13 +318,10 @@ class _MessageCard extends StatelessWidget {
           const SizedBox(height: 9),
           Text(
             deleted ? 'Message deleted by its sender or the creator.' : body,
-            style: AppText.body(
-              13,
-              color: deleted ? muted : ink,
-              h: 1.45,
-            ).copyWith(
-              fontStyle: deleted ? FontStyle.italic : FontStyle.normal,
-            ),
+            style: AppText.body(13, color: deleted ? muted : ink, h: 1.45)
+                .copyWith(
+                  fontStyle: deleted ? FontStyle.italic : FontStyle.normal,
+                ),
           ),
           const SizedBox(height: 8),
           Text(
@@ -416,4 +405,3 @@ class _Empty extends StatelessWidget {
     );
   }
 }
-

@@ -41,8 +41,6 @@ class AdminService {
       'admin_room_details',
       params: {'p_room_id': roomId},
     );
-    return AdminRoomSnapshot.fromMap(
-      Map<String, dynamic>.from(result as Map),
-    );
+    return AdminRoomSnapshot.fromMap(Map<String, dynamic>.from(result as Map));
   }
 }
