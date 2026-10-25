@@ -1,10 +1,8 @@
 // lib/users/screens/home-screen.dart
 import 'package:flutter/material.dart';
 
-import '../../common/screens/session-gate.dart';
 import '../../common/utils/format.dart';
 import '../../common/widgets/theme-toggle-button.dart';
-import '../../data/auth-service.dart';
 import '../../data/errors.dart';
 import '../../data/models.dart';
 import '../../data/profile-service.dart';
@@ -48,8 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         _profile = profile;
         _rooms = rooms;
-        _invites =
-            requests.where((r) => r.isInvite && r.isPending).length;
+        _invites = requests.where((r) => r.isInvite && r.isPending).length;
       });
     } catch (error) {
       if (!mounted) return;
@@ -60,19 +57,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _open(Widget screen) async {
-    await Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
-    );
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
     if (mounted) _load();
   }
 
   Future<void> _openChat(RoomSummary room) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ChatRoomScreen(
-          roomId: room.id,
-          roomName: room.name,
-        ),
+        builder: (_) => ChatRoomScreen(roomId: room.id, roomName: room.name),
       ),
     );
     if (mounted) _load();
@@ -90,7 +82,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (changed == true && mounted) _load();
   }
-
 
   Future<void> _editHandle() async {
     final profile = _profile;
@@ -132,8 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   autofocus: true,
                   enabled: !busy,
                   validator: (value) {
-                    final handle =
-                        ProfileService.normalizeHandle(value ?? '');
+                    final handle = ProfileService.normalizeHandle(value ?? '');
                     if (!ProfileService.isValidHandle(handle)) {
                       return 'Use 3-24 lowercase letters, numbers or _.';
                     }
@@ -172,8 +162,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (!(formKey.currentState?.validate() ?? false)) {
                         return;
                       }
-                      final handle =
-                          ProfileService.normalizeHandle(controller.text);
+                      final handle = ProfileService.normalizeHandle(
+                        controller.text,
+                      );
                       setDialogState(() {
                         busy = true;
                         error = null;
@@ -213,48 +204,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
     controller.dispose();
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ChatMate ID updated.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ChatMate ID updated.')));
       _load();
     }
   }
-
-  Future<void> _signOut() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppTheme.surface(dialogContext),
-        shape: const RoundedRectangleBorder(),
-        title: Text(
-          'Leave ChatMate?',
-          style: AppText.serif(24, color: AppTheme.ink(dialogContext)),
-        ),
-        content: Text(
-          'You can return and keep this anonymous ID on this device.',
-          style: AppText.body(13, color: AppTheme.muted(dialogContext)),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('STAY'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('SIGN OUT'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true) return;
-    await AuthService.signOut();
-    if (!mounted) return;
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const SessionGate()),
-      (_) => false,
-    );
-  }
-
 
   @override
   Widget build(BuildContext context) {
@@ -356,10 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   const Spacer(),
                   Text(
                     '${_rooms.length}',
-                    style: AppText.mono(
-                      11,
-                      color: AppTheme.accent(context),
-                    ),
+                    style: AppText.mono(11, color: AppTheme.accent(context)),
                   ),
                 ],
               ),
@@ -380,10 +332,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ..._rooms.map(
                   (room) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: _RoomTile(
-                      room: room,
-                      onTap: () => _openChat(room),
-                    ),
+                    child: _RoomTile(room: room, onTap: () => _openChat(room)),
                   ),
                 ),
               const SizedBox(height: 30),
@@ -394,7 +343,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
 
   Widget _header(BuildContext context, Profile? profile) {
     final initials = (profile?.handle.isNotEmpty ?? false)
@@ -415,10 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: Text(
               initials,
-              style: AppText.serif(
-                20,
-                color: AppTheme.surface(context),
-              ),
+              style: AppText.serif(20, color: AppTheme.surface(context)),
             ),
           ),
         ),
@@ -444,10 +389,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(
                         profile == null ? '—' : '@${profile.handle}',
                         overflow: TextOverflow.ellipsis,
-                        style: AppText.mono(
-                          13,
-                          color: AppTheme.ink(context),
-                        ),
+                        style: AppText.mono(13, color: AppTheme.ink(context)),
                       ),
                     ),
                     const SizedBox(width: 5),
@@ -470,34 +412,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _footer(BuildContext context) {
-    return Row(
-      children: [
-        Text(
-          'NO SENDER. NO TRACE.',
-          style: AppText.mono(
-            9,
-            color: AppTheme.muted(context),
-            ls: 1.2,
-          ),
-        ),
-        const Spacer(),
-        TextButton(
-          onPressed: _signOut,
-          style: TextButton.styleFrom(
-            foregroundColor: AppTheme.muted(context),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Text(
-            'SIGN OUT',
-            style: AppText.mono(10, ls: 1.2),
-          ),
-        ),
-      ],
+    return Text(
+      'NO SENDER. NO TRACE.',
+      style: AppText.mono(9, color: AppTheme.muted(context), ls: 1.2),
     );
   }
-
 }
 
 class _ActionCard extends StatelessWidget {
@@ -533,8 +452,9 @@ class _ActionCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color:
-                  filled ? AppTheme.accent(context) : AppTheme.border(context),
+              color: filled
+                  ? AppTheme.accent(context)
+                  : AppTheme.border(context),
             ),
           ),
           child: Column(
@@ -542,19 +462,13 @@ class _ActionCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Text(
-                    label,
-                    style: AppText.mono(8.5, color: sub, ls: 1.3),
-                  ),
+                  Text(label, style: AppText.mono(8.5, color: sub, ls: 1.3)),
                   const Spacer(),
                   Icon(icon, size: 18, color: fg),
                 ],
               ),
               const SizedBox(height: 14),
-              Text(
-                title,
-                style: AppText.serif(20, color: fg, h: 1.05),
-              ),
+              Text(title, style: AppText.serif(20, color: fg, h: 1.05)),
               const SizedBox(height: 4),
               Text(
                 caption,
@@ -620,7 +534,6 @@ class _RequestsButton extends StatelessWidget {
   }
 }
 
-
 class _RoomTile extends StatelessWidget {
   const _RoomTile({required this.room, required this.onTap});
 
@@ -668,10 +581,7 @@ class _RoomTile extends StatelessWidget {
                       room.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppText.serif(
-                        18,
-                        color: AppTheme.ink(context),
-                      ),
+                      style: AppText.serif(18, color: AppTheme.ink(context)),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -709,10 +619,7 @@ class _RoomTile extends StatelessWidget {
                   else if (room.lastMessageAt != null)
                     Text(
                       relativeTime(room.lastMessageAt),
-                      style: AppText.mono(
-                        9,
-                        color: AppTheme.muted(context),
-                      ),
+                      style: AppText.mono(9, color: AppTheme.muted(context)),
                     ),
                   const SizedBox(height: 6),
                   Icon(
@@ -729,7 +636,6 @@ class _RoomTile extends StatelessWidget {
     );
   }
 }
-
 
 class _ErrorBanner extends StatelessWidget {
   const _ErrorBanner({required this.message, required this.onRetry});
@@ -756,10 +662,7 @@ class _ErrorBanner extends StatelessWidget {
               style: AppText.body(12, color: AppTheme.ink(context)),
             ),
           ),
-          TextButton(
-            onPressed: onRetry,
-            child: const Text('RETRY'),
-          ),
+          TextButton(onPressed: onRetry, child: const Text('RETRY')),
         ],
       ),
     );
@@ -791,11 +694,7 @@ class _EmptyRooms extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Create a room and invite someone, or enter a code you were given.',
-            style: AppText.body(
-              12.5,
-              color: AppTheme.muted(context),
-              h: 1.5,
-            ),
+            style: AppText.body(12.5, color: AppTheme.muted(context), h: 1.5),
           ),
           const SizedBox(height: 14),
           Row(
@@ -805,10 +704,7 @@ class _EmptyRooms extends StatelessWidget {
                 child: const Text('CREATE A ROOM'),
               ),
               const SizedBox(width: 6),
-              TextButton(
-                onPressed: onJoin,
-                child: const Text('JOIN ONE'),
-              ),
+              TextButton(onPressed: onJoin, child: const Text('JOIN ONE')),
             ],
           ),
         ],
@@ -816,7 +712,6 @@ class _EmptyRooms extends StatelessWidget {
     );
   }
 }
-
 
 class _RequestsSheet extends StatefulWidget {
   const _RequestsSheet();
@@ -856,6 +751,14 @@ class _RequestsSheetState extends State<_RequestsSheet> {
   }
 
   Future<void> _respond(RoomRequestItem item, bool accept) async {
+    if (accept && item.needsCreatorApproval) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('The room creator still needs to verify this invite.'),
+        ),
+      );
+      return;
+    }
     setState(() => _busy.add(item.requestId));
     try {
       await RoomService.respondRequest(
@@ -867,18 +770,16 @@ class _RequestsSheetState extends State<_RequestsSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            accept
-                ? 'You joined ${item.roomName}.'
-                : 'Invitation declined.',
+            accept ? 'You joined ${item.roomName}.' : 'Invitation declined.',
           ),
         ),
       );
       await _load();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyError(error))));
     } finally {
       if (mounted) setState(() => _busy.remove(item.requestId));
     }
@@ -887,10 +788,8 @@ class _RequestsSheetState extends State<_RequestsSheet> {
   Future<void> _openRoom(RoomRequestItem item) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ChatRoomScreen(
-          roomId: item.roomId,
-          roomName: item.roomName,
-        ),
+        builder: (_) =>
+            ChatRoomScreen(roomId: item.roomId, roomName: item.roomName),
       ),
     );
     if (mounted) _load();
@@ -898,10 +797,8 @@ class _RequestsSheetState extends State<_RequestsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final invites =
-        _items.where((r) => r.isInvite && r.isPending).toList();
-    final outgoing =
-        _items.where((r) => !r.isInvite && r.isPending).toList();
+    final invites = _items.where((r) => r.isInvite && r.isPending).toList();
+    final outgoing = _items.where((r) => !r.isInvite && r.isPending).toList();
     final history = _items.where((r) => !r.isPending).toList();
 
     return FractionallySizedBox(
@@ -1000,7 +897,6 @@ class _RequestsSheetState extends State<_RequestsSheet> {
   }
 }
 
-
 class _RequestCard extends StatelessWidget {
   const _RequestCard({
     required this.item,
@@ -1019,8 +915,13 @@ class _RequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = item.isInvite
-        ? '@${item.otherHandle} invited you'
+        ? item.needsCreatorApproval
+              ? '@${item.otherHandle} invited you · creator verifying'
+              : '@${item.otherHandle} invited you'
         : 'You asked to join';
+    final statusLabel = item.needsCreatorApproval
+        ? 'AWAITING CREATOR'
+        : item.status.toUpperCase();
     final created = relativeTime(item.createdAt);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1040,14 +941,11 @@ class _RequestCard extends StatelessWidget {
                   item.roomName,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppText.serif(
-                    19,
-                    color: AppTheme.ink(context),
-                  ),
+                  style: AppText.serif(19, color: AppTheme.ink(context)),
                 ),
               ),
               Text(
-                item.status.toUpperCase(),
+                statusLabel,
                 style: AppText.mono(
                   8,
                   color: item.isPending
@@ -1061,24 +959,35 @@ class _RequestCard extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             '$subtitle · ${item.visibility}${created.isEmpty ? '' : ' · $created'}',
-            style: AppText.body(
-              11.5,
-              color: AppTheme.muted(context),
-            ),
+            style: AppText.body(11.5, color: AppTheme.muted(context)),
           ),
           if (item.isPending && item.isInvite) ...[
+            if (item.needsCreatorApproval) ...[
+              const SizedBox(height: 10),
+              Text(
+                'The room creator must verify this invite before you can '
+                'accept it.',
+                style: AppText.body(
+                  11.5,
+                  color: AppTheme.muted(context),
+                  h: 1.4,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: _SheetButton(
-                    label: 'ACCEPT',
-                    filled: true,
-                    busy: busy,
-                    onTap: onAccept,
+                if (!item.needsCreatorApproval) ...[
+                  Expanded(
+                    child: _SheetButton(
+                      label: 'ACCEPT',
+                      filled: true,
+                      busy: busy,
+                      onTap: onAccept,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: _SheetButton(
                     label: 'DECLINE',
@@ -1147,8 +1056,9 @@ class _SheetButton extends StatelessWidget {
                   label,
                   style: AppText.mono(
                     10,
-                    color:
-                        filled ? AppTheme.surface(context) : AppTheme.ink(context),
+                    color: filled
+                        ? AppTheme.surface(context)
+                        : AppTheme.ink(context),
                     ls: 1.2,
                   ),
                 ),
@@ -1157,4 +1067,3 @@ class _SheetButton extends StatelessWidget {
     );
   }
 }
-

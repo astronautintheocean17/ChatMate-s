@@ -7,6 +7,7 @@ import '../../data/auth-service.dart';
 import '../../data/errors.dart';
 import '../../data/models.dart';
 import '../../data/profile-service.dart';
+import '../../data/room-link-service.dart';
 import '../../data/room-service.dart';
 import '../../theme/app-theme.dart';
 
@@ -37,6 +38,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
   bool _inviting = false;
   bool _nameInitialized = false;
   String _visibility = 'public';
+  String _joinMode = 'request';
   String? _busyRequestId;
   String? _removingId;
   String? _error;
@@ -82,6 +84,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
         if (!_nameInitialized) {
           _nameController.text = details.name;
           _visibility = details.visibility;
+          _joinMode = details.joinMode;
           _nameInitialized = true;
         }
       });
@@ -126,7 +129,6 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
     _channel = channel;
   }
 
-
   Future<void> _saveRoom() async {
     final details = _details;
     if (details == null || _saving) return;
@@ -144,6 +146,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
         roomId: widget.roomId,
         name: name,
         visibility: _visibility,
+        joinMode: _joinMode,
       );
       await _load(silent: true);
       widget.onChanged();
@@ -156,11 +159,8 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
   }
 
   Future<void> _invite() async {
-    if (_inviting || !(_details?.isCreator ?? false)) return;
-    final raw = _inviteController.text.trim().replaceFirst(
-          RegExp(r'^@'),
-          '',
-        );
+    if (_inviting || _details == null) return;
+    final raw = _inviteController.text.trim().replaceFirst(RegExp(r'^@'), '');
     final handle = ProfileService.normalizeHandle(raw);
     if (!ProfileService.isValidHandle(handle)) {
       _snack('Handles are 3-24 lowercase letters, numbers or underscores.');
@@ -171,13 +171,18 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
       _error = null;
     });
     try {
-      await RoomService.inviteMember(
+      final result = await RoomService.inviteMember(
         roomId: widget.roomId,
         handle: handle,
       );
+      final needsCreator = result['needs_creator_approval'] == true;
       _inviteController.clear();
       await _load(silent: true);
-      _snack('@$handle has an invite waiting.');
+      _snack(
+        needsCreator
+            ? '@$handle was invited. The room creator still needs to verify it.'
+            : '@$handle has an invite waiting.',
+      );
     } catch (error) {
       _snack(friendlyError(error));
     } finally {
@@ -195,12 +200,16 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
       );
       await _load(silent: true);
       widget.onChanged();
+      final verifyingInvite =
+          accept && request.isInvite && request.isAwaitingCreator;
       _snack(
-        accept
+        verifyingInvite
+            ? 'Invite verified. @${request.handle} can now accept it.'
+            : accept
             ? '@${request.handle} is in the room.'
             : request.isInvite
-                ? 'Invite to @${request.handle} was cancelled.'
-                : '@${request.handle} was declined.',
+            ? 'Invite to @${request.handle} was cancelled.'
+            : '@${request.handle} was declined.',
       );
     } catch (error) {
       _snack(friendlyError(error));
@@ -223,11 +232,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
         content: Text(
           'They lose access to the room immediately. Messages they sent stay '
           'in the conversation.',
-          style: AppText.body(
-            13,
-            color: AppTheme.muted(dialogContext),
-            h: 1.5,
-          ),
+          style: AppText.body(13, color: AppTheme.muted(dialogContext), h: 1.5),
         ),
         actions: [
           TextButton(
@@ -265,11 +270,19 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
     _snack('Room code copied.');
   }
 
+  Future<void> _copyInviteLink() async {
+    final code = _details?.code;
+    if (code == null) return;
+    final link = RoomLinkService.linkForCode(code);
+    await Clipboard.setData(ClipboardData(text: link));
+    _snack('Invite link copied.');
+  }
+
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -329,45 +342,47 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
                     ),
                   )
                 : _fatal != null
-                    ? _buildFatal()
-                    : details == null
-                        ? const SizedBox.shrink()
-                        : RefreshIndicator(
-                            color: AppTheme.accent(context),
-                            onRefresh: _refresh,
-                            child: ListView(
-                              padding: EdgeInsets.fromLTRB(
-                                20,
-                                6,
-                                20,
-                                24 + MediaQuery.paddingOf(context).bottom,
-                              ),
-                              children: [
-                                _buildRoomSection(details),
-                                const SizedBox(height: 18),
-                                _buildCodeSection(details),
-                                if (details.isCreator) ...[
-                                  const SizedBox(height: 18),
-                                  _buildInviteSection(),
-                                  const SizedBox(height: 18),
-                                  _buildPendingSection(),
-                                ],
-                                const SizedBox(height: 18),
-                                _buildMembersSection(details),
-                                const SizedBox(height: 20),
-                                Text(
-                                  'Messages are always fetched through a '
-                                  'membership check. Anonymous senders stay '
-                                  'anonymous here too.',
-                                  style: AppText.body(
-                                    11.5,
-                                    color: AppTheme.muted(context),
-                                    h: 1.5,
-                                  ),
-                                ),
-                              ],
-                            ),
+                ? _buildFatal()
+                : details == null
+                ? const SizedBox.shrink()
+                : RefreshIndicator(
+                    color: AppTheme.accent(context),
+                    onRefresh: _refresh,
+                    child: ListView(
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        6,
+                        20,
+                        24 + MediaQuery.paddingOf(context).bottom,
+                      ),
+                      children: [
+                        _buildRoomSection(details),
+                        const SizedBox(height: 18),
+                        _buildCodeSection(details),
+                        if (details.isCreator || details.isOpenJoin) ...[
+                          const SizedBox(height: 18),
+                          _buildInviteSection(),
+                        ],
+                        if (details.isCreator) ...[
+                          const SizedBox(height: 18),
+                          _buildPendingSection(),
+                        ],
+                        const SizedBox(height: 18),
+                        _buildMembersSection(details),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Messages are always fetched through a '
+                          'membership check. Anonymous senders stay '
+                          'anonymous here too.',
+                          style: AppText.body(
+                            11.5,
+                            color: AppTheme.muted(context),
+                            h: 1.5,
                           ),
+                        ),
+                      ],
+                    ),
+                  ),
           ),
         ],
       ),
@@ -384,11 +399,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
             Text(
               _fatal!,
               textAlign: TextAlign.center,
-              style: AppText.body(
-                13,
-                color: AppTheme.muted(context),
-                h: 1.5,
-              ),
+              style: AppText.body(13, color: AppTheme.muted(context), h: 1.5),
             ),
             const SizedBox(height: 16),
             FilledButton(
@@ -402,30 +413,26 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
   }
 
   Widget _label(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(
-          text,
-          style: AppText.mono(
-            9,
-            color: AppTheme.muted(context),
-            ls: 1.5,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      text,
+      style: AppText.mono(9, color: AppTheme.muted(context), ls: 1.5),
+    ),
+  );
 
   Widget _card(List<Widget> children) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppTheme.surface(context),
-          border: Border.all(color: AppTheme.line(context)),
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: children,
-        ),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: AppTheme.surface(context),
+      border: Border.all(color: AppTheme.line(context)),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    ),
+  );
 
   Widget _buildRoomSection(RoomDetails details) {
     if (!details.isCreator) {
@@ -453,11 +460,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
                   '${details.isPrivate ? 'PRIVATE' : 'PUBLIC'} · '
                   '${details.memberCount} '
                   '${details.memberCount == 1 ? 'MEMBER' : 'MEMBERS'}',
-                  style: AppText.mono(
-                    9,
-                    color: AppTheme.muted(context),
-                    ls: 1,
-                  ),
+                  style: AppText.mono(9, color: AppTheme.muted(context), ls: 1),
                 ),
               ],
             ),
@@ -524,14 +527,40 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
           Text(
             _visibility == 'private'
                 ? 'Hidden from name search. The code can find it, but joining '
-                    'always needs your approval.'
+                      'always needs your approval.'
                 : 'Findable by name and code. People still need your approval '
-                    'before joining.',
-            style: AppText.body(
-              11.5,
-              color: AppTheme.muted(context),
-              h: 1.45,
-            ),
+                      'before joining.',
+            style: AppText.body(11.5, color: AppTheme.muted(context), h: 1.45),
+          ),
+          const SizedBox(height: 16),
+          _label('HOW PEOPLE JOIN'),
+          Row(
+            children: [
+              Expanded(
+                child: _joinModeOption(
+                  value: 'open',
+                  icon: Icons.link_rounded,
+                  label: 'OPEN LINK',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _joinModeOption(
+                  value: 'request',
+                  icon: Icons.how_to_reg_rounded,
+                  label: 'REQUEST ONLY',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _joinMode == 'open'
+                ? 'Anyone with the invite link can ask to join, and members can '
+                      'add people by ID. You verify every invite and request.'
+                : 'Only you can add people by ID. Link and code requests still '
+                      'come to you for approval.',
+            style: AppText.body(11.5, color: AppTheme.muted(context), h: 1.45),
           ),
           const SizedBox(height: 14),
           Align(
@@ -567,9 +596,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: selected ? accent.withValues(alpha: 0.08) : Colors.transparent,
-          border: Border.all(
-            color: selected ? accent : AppTheme.line(context),
-          ),
+          border: Border.all(color: selected ? accent : AppTheme.line(context)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -594,6 +621,50 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
     );
   }
 
+  Widget _joinModeOption({
+    required String value,
+    required IconData icon,
+    required String label,
+  }) {
+    final selected = _joinMode == value;
+    final accent = AppTheme.accent(context);
+    return InkWell(
+      onTap: () => setState(() => _joinMode = value),
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+        decoration: BoxDecoration(
+          color: selected ? accent.withValues(alpha: 0.08) : Colors.transparent,
+          border: Border.all(color: selected ? accent : AppTheme.line(context)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: selected ? accent : AppTheme.muted(context),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.mono(
+                  8.5,
+                  color: selected ? accent : AppTheme.muted(context),
+                  ls: 0.8,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCodeSection(RoomDetails details) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -605,11 +676,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
               Expanded(
                 child: Text(
                   details.code,
-                  style: AppText.mono(
-                    22,
-                    color: AppTheme.ink(context),
-                    ls: 4,
-                  ),
+                  style: AppText.mono(22, color: AppTheme.ink(context), ls: 4),
                 ),
               ),
               IconButton(
@@ -621,16 +688,34 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
           ),
           Text(
             details.isPrivate
-                ? 'Share the code. Joining still needs your approval.'
-                : 'Anyone with this code can request to join.',
+                ? 'Share the code or link. Every join needs your approval.'
+                : 'Anyone with this code or link can ask to join.',
             style: AppText.body(11.5, color: AppTheme.muted(context)),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _copyInviteLink,
+              icon: const Icon(Icons.ios_share_rounded, size: 16),
+              label: Text(
+                'SHARE INVITE LINK',
+                style: AppText.mono(9, color: AppTheme.ink(context), ls: 1.2),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppTheme.ink(context),
+                side: BorderSide(color: AppTheme.line(context)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
           ),
         ]),
       ],
     );
   }
-
-
 
   Widget _buildInviteSection() {
     return Column(
@@ -655,18 +740,13 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
                     isDense: true,
                     hintText: 'handle',
                     prefixText: '@',
-                    hintStyle: AppText.mono(
-                      13,
-                      color: AppTheme.muted(context),
-                    ),
+                    hintStyle: AppText.mono(13, color: AppTheme.muted(context)),
                     border: const OutlineInputBorder(),
                     enabledBorder: OutlineInputBorder(
                       borderSide: BorderSide(color: AppTheme.line(context)),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderSide: BorderSide(
-                        color: AppTheme.accent(context),
-                      ),
+                      borderSide: BorderSide(color: AppTheme.accent(context)),
                     ),
                   ),
                 ),
@@ -686,13 +766,12 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
           ),
           const SizedBox(height: 8),
           Text(
-            'They need to accept the invite in REQUESTS before they can open '
-            'the room.',
-            style: AppText.body(
-              11.5,
-              color: AppTheme.muted(context),
-              h: 1.45,
-            ),
+            (_details?.isCreator ?? false)
+                ? 'They need to accept the invite in REQUESTS before they can '
+                      'open the room.'
+                : 'The room creator verifies this invite first. Then they can '
+                      'accept it in REQUESTS.',
+            style: AppText.body(11.5, color: AppTheme.muted(context), h: 1.45),
           ),
         ]),
       ],
@@ -723,10 +802,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
               : [
                   for (var index = 0; index < _pending.length; index++) ...[
                     if (index > 0)
-                      Divider(
-                        height: 18,
-                        color: AppTheme.line(context),
-                      ),
+                      Divider(height: 18, color: AppTheme.line(context)),
                     _pendingRow(_pending[index]),
                   ],
                 ],
@@ -738,6 +814,15 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
   Widget _pendingRow(PendingRoomRequest request) {
     final accent = AppTheme.accent(context);
     final busy = _busyRequestId == request.requestId;
+    final awaitingCreator = request.isAwaitingCreator;
+    final inviter = request.createdByHandle.isEmpty
+        ? 'a member'
+        : '@${request.createdByHandle}';
+    final subtitle = request.isInvite
+        ? awaitingCreator
+              ? 'INVITED BY $inviter · NEEDS YOUR OK'
+              : 'INVITE SENT · WAITING FOR THEM'
+        : 'WANTS TO JOIN';
     return Row(
       children: [
         _avatar(request.handle),
@@ -758,11 +843,11 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
               ),
               const SizedBox(height: 2),
               Text(
-                request.isInvite ? 'INVITED BY YOU' : 'WANTS TO JOIN',
+                subtitle,
                 style: AppText.mono(
                   8.5,
-                  color: AppTheme.muted(context),
-                  ls: 1,
+                  color: awaitingCreator ? accent : AppTheme.muted(context),
+                  ls: 0.8,
                 ),
               ),
             ],
@@ -772,12 +857,9 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
           SizedBox(
             width: 18,
             height: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 1.6,
-              color: accent,
-            ),
+            child: CircularProgressIndicator(strokeWidth: 1.6, color: accent),
           )
-        else if (request.isInvite)
+        else if (request.isInvite && !awaitingCreator)
           IconButton(
             tooltip: 'Cancel invite',
             onPressed: () => _respond(request, false),
@@ -787,10 +869,10 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
               side: BorderSide(color: AppTheme.line(context)),
             ),
             icon: const Icon(Icons.close_rounded, size: 17),
-          )
-        else ...[
+          ),
+        if (!busy && (!request.isInvite || awaitingCreator)) ...[
           IconButton(
-            tooltip: 'Accept',
+            tooltip: request.isInvite ? 'Verify invite' : 'Accept',
             onPressed: () => _respond(request, true),
             style: IconButton.styleFrom(
               backgroundColor: accent,
@@ -798,11 +880,16 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
               minimumSize: const Size(34, 34),
               padding: EdgeInsets.zero,
             ),
-            icon: const Icon(Icons.check_rounded, size: 17),
+            icon: Icon(
+              request.isInvite
+                  ? Icons.verified_user_rounded
+                  : Icons.check_rounded,
+              size: 17,
+            ),
           ),
           const SizedBox(width: 6),
           IconButton(
-            tooltip: 'Decline',
+            tooltip: request.isInvite ? 'Cancel invite' : 'Decline',
             onPressed: () => _respond(request, false),
             style: IconButton.styleFrom(
               minimumSize: const Size(34, 34),
@@ -823,8 +910,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
         _label('MEMBERS (${_members.length})'),
         _card([
           for (var index = 0; index < _members.length; index++) ...[
-            if (index > 0)
-              Divider(height: 20, color: AppTheme.line(context)),
+            if (index > 0) Divider(height: 20, color: AppTheme.line(context)),
             _memberRow(_members[index], details),
           ],
         ]),
@@ -854,10 +940,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
                   ),
                 ),
               ),
-              if (isMe) ...[
-                const SizedBox(width: 5),
-                _tag('YOU'),
-              ],
+              if (isMe) ...[const SizedBox(width: 5), _tag('YOU')],
             ],
           ),
         ),
@@ -913,19 +996,14 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
   }
 
   Widget _tag(String text) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-        decoration: BoxDecoration(
-          border: Border.all(color: AppTheme.line(context)),
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Text(
-          text,
-          style: AppText.mono(
-            7.5,
-            color: AppTheme.muted(context),
-            ls: 0.8,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+    decoration: BoxDecoration(
+      border: Border.all(color: AppTheme.line(context)),
+      borderRadius: BorderRadius.circular(3),
+    ),
+    child: Text(
+      text,
+      style: AppText.mono(7.5, color: AppTheme.muted(context), ls: 0.8),
+    ),
+  );
 }
-

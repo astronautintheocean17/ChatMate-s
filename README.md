@@ -48,15 +48,19 @@ The web build is a full PWA. It includes:
 - Branded title, description, Open Graph and Twitter metadata.
 - A generated web manifest with 192px, 512px and maskable icons.
 - A branded loading screen carrying the ChatMate quote and slogan.
-- `web/install.js` + `web/install.css`: a small branded install popup. It opens
-  1.5 seconds after load unless ChatMate is already running as an installed app
-  or the visitor closed it this session. The single **Install to device** button
-  calls the browser's native installer; if the browser has not offered it yet,
-  the popup says so and stays open. Closing the popup lasts for the tab session
-  only.
+- `web/install.js` + `web/install.css`: a persistent **INSTALL** tab pinned to
+  the side of the app. It appears as soon as the page is ready and stays there
+  until ChatMate is installed, so nobody has to wait for a delayed popup.
+  Tapping it launches the browser's native installer immediately when Chrome or
+  Edge has offered one; otherwise it opens the branded install card with the
+  browser's own Install / Add to Home Screen instructions. The card can be
+  closed, but the side tab remains.
 - `web/flutter_bootstrap.js` + `web/service-worker.js`: disable Flutter's
-  generated worker (it unregisters itself) and register a pass-through fetch
-  handler so Chromium keeps the app installable.
+  generated worker (it unregisters itself), keep an active fetch handler so
+  Chromium keeps the app installable, and runtime-cache large static assets
+  (CanvasKit wasm, icons, fonts) for faster repeat loads.
+- A preload hint for `main.dart.js` and a preconnect to the CanvasKit CDN so the
+  first download starts earlier.
 
 Build and serve over HTTPS (or localhost) for the browser to offer install:
 
@@ -65,10 +69,10 @@ flutter build web --release
 ```
 
 Chrome and Edge expose the native install flow. On a first visit Chrome may need
-about 30 seconds of engagement before it offers the installer; the popup still
-opens, and the button works as soon as the browser is ready. Safari and Firefox
-have no programmatic install API, so the popup falls back to the browser's own
-Install or Add to Home Screen option.
+about 30 seconds of engagement before it offers the installer; the side tab is
+visible the whole time and starts the installer as soon as the browser is ready.
+Safari and Firefox have no programmatic install API, so the install card falls
+back to the browser's own Install or Add to Home Screen option.
 
 ## Launcher icons
 
@@ -88,5 +92,7 @@ flutter build web
 ```
 
 The app targets Flutter with Supabase Auth/Postgres/Realtime. See
-`supabase/0001_init.sql` and `supabase/SETUP.md` for the backend contract.
+`supabase/0001_init.sql`, `supabase/0002_invite_links.sql` and
+`supabase/SETUP.md` for the backend contract. Use `0002_invite_links.sql` when
+upgrading an existing Supabase project.
 

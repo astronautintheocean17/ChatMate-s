@@ -49,21 +49,34 @@ Also confirm **Email** provider is enabled (it is by default). The admin uses it
 
 ---
 
-## 3. Create the schema
+## 3. Create or upgrade the schema
+
+### New / empty Supabase project
 
 1. Open **SQL Editor** → **New query**.
 2. Open `supabase/0001_init.sql` from this project, copy **all** of it.
 3. Paste into the SQL Editor and click **Run**.
-4. You should see `Success. No rows returned` at the end.
 
-What it creates:
+### Existing ChatMate project (already has tables)
+
+1. Open **SQL Editor** → **New query**.
+2. Open `supabase/0002_invite_links.sql`, copy **all** of it.
+3. Paste and click **Run**. This is the only file needed for the current
+   invite-link / join-mode upgrade.
+
+`0002_invite_links.sql` adds `rooms.join_mode`,
+`room_requests.creator_approved`, and the current room RPCs
+(`room_access_preview`, `join_room_by_code`, and the updated
+create/invite/request functions). It is safe to run more than once.
+
+What the tables contain:
 
 | Table | Purpose |
 |---|---|
 | `profiles` | one unique handle per auth user |
-| `rooms` | name, unique 6-character code, public/private |
+| `rooms` | name, unique 6-character code, public/private, open/request join mode |
 | `room_members` | membership + last-read timestamp |
-| `room_requests` | invites from creators + join requests from users |
+| `room_requests` | creator-verified invites + creator-approved join requests |
 | `messages` | message text, optional reveal flag, soft delete |
 | `message_reads` | per-message seen receipts (counts only, never names) |
 
@@ -71,7 +84,9 @@ All writes go through `security definer` RPCs. The `messages` and
 `message_reads` tables cannot be read directly by the app at all, so a modified
 client still cannot recover a hidden sender.
 
-If you re-run the file later it replaces functions/policies safely.
+For an existing project, running `0002_invite_links.sql` is enough. A fresh
+project should run `0001_init.sql`, which already contains the same columns and
+functions in the full initial schema.
 
 ---
 
@@ -154,7 +169,14 @@ Use two browsers / two devices (or one normal + one incognito).
 8. Start typing on B → A sees "Someone is typing something…".
 9. A creates a **private** room and invites B by handle → B gets it in
    **REQUESTS** → accept → room appears.
-10. Admin link → `yourdad` / `nowaytoguess69` → Users / Rooms → open any room in
+10. A opens room info → **SHARE INVITE LINK** → copy. In a private/incognito
+    window, open the link → create a new ChatMate ID → **REQUEST TO JOIN**.
+    A must verify/approve it in **INVITES & REQUESTS** before that person gets
+    access. A link never bypasses creator approval.
+11. A opens room info and switches **OPEN LINK / REQUEST ONLY**. In open mode,
+    any member can add someone by ID, but A still verifies the invite. In
+    request-only mode, only A can add people by ID.
+12. Admin link → `yourdad` / `nowaytoguess69` → Users / Rooms → open any room in
     ghost mode. Anonymous senders stay anonymous.
 
 Permission checks to try (they should all fail):
@@ -172,8 +194,13 @@ Permission checks to try (they should all fail):
   storage is cleared, the identity cannot be recovered. There is no logout for
   normal users, as requested. Changing the handle is possible in Profile.
 - **Private rooms** are hidden from name search. They can still be found by
-  their exact 6-character code, but joining always needs creator approval.
-  Invited users also need to accept before they become members.
+  their exact 6-character code or an invite link, but joining always needs
+  creator approval. Invited users also need to accept before they become
+  members.
+- **Open link rooms** let any member add someone by ChatMate ID, but the creator
+  verifies that invite before the invited person can accept. **Request-only
+  rooms** limit adding by ID to the creator. In both modes, every link/code join
+  is a request until the creator approves it.
 - **First member to open a room** marks existing messages read. Seen counts are
   per message and sender-only.
 - **Realtime channels** for messages/typing use signal-only payloads

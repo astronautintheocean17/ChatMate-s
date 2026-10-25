@@ -6,11 +6,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:chatmate/users/screens/home-screen.dart';
+import 'package:chatmate/users/screens/room-invite-screen.dart';
 import '../../admin/screens/admin-login-screen.dart';
 import '../../data/auth-service.dart';
 import '../../data/errors.dart';
 import '../../data/profile-service.dart';
-
 
 class _C {
   // Dark theme — green / black / white
@@ -30,45 +30,46 @@ class _T {
     FontStyle style = FontStyle.normal,
     double h = 1.05,
     double ls = -0.5,
-  }) =>
-      GoogleFonts.fraunces(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        fontStyle: style,
-        height: h,
-        letterSpacing: ls,
-      );
+  }) => GoogleFonts.fraunces(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    fontStyle: style,
+    height: h,
+    letterSpacing: ls,
+  );
 
   static TextStyle body(
     double size, {
     Color color = _C.ink,
     FontWeight w = FontWeight.w400,
     double h = 1.55,
-  }) =>
-      GoogleFonts.interTight(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        height: h,
-      );
+  }) => GoogleFonts.interTight(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    height: h,
+  );
 
   static TextStyle mono(
     double size, {
     Color color = _C.muted,
     FontWeight w = FontWeight.w500,
     double ls = 1.2,
-  }) =>
-      GoogleFonts.jetBrainsMono(
-        fontSize: size,
-        color: color,
-        fontWeight: w,
-        letterSpacing: ls,
-      );
+  }) => GoogleFonts.jetBrainsMono(
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    letterSpacing: ls,
+  );
 }
 
 class CreateIdScreen extends StatefulWidget {
-  const CreateIdScreen({super.key});
+  const CreateIdScreen({super.key, this.pendingRoomCode});
+
+  /// A room code from an invite link. It is carried through onboarding so the
+  /// new ChatMate ID lands on the room request instead of the home feed.
+  final String? pendingRoomCode;
 
   @override
   State<CreateIdScreen> createState() => _CreateIdScreenState();
@@ -142,7 +143,9 @@ class _CreateIdScreenState extends State<CreateIdScreen> {
   Future<void> _continue() async {
     if (_busy) return;
     if (!_formatValid) {
-      setState(() => _error = 'Use 3-24 lowercase letters, numbers or underscores.');
+      setState(
+        () => _error = 'Use 3-24 lowercase letters, numbers or underscores.',
+      );
       return;
     }
     if (_available != true) {
@@ -159,8 +162,13 @@ class _CreateIdScreenState extends State<CreateIdScreen> {
       await AuthService.ensureAnonymousSession();
       await ProfileService.create(_handle);
       if (!mounted) return;
+      final pendingCode = widget.pendingRoomCode;
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(
+          builder: (_) => pendingCode == null
+              ? const HomeScreen()
+              : RoomInviteScreen(code: pendingCode),
+        ),
         (_) => false,
       );
     } catch (error) {
@@ -341,6 +349,32 @@ class _CreateIdScreenState extends State<CreateIdScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.pendingRoomCode != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: _C.accent.withValues(alpha: 0.08),
+                border: Border.all(color: _C.accent.withValues(alpha: 0.45)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'ROOM INVITE · ${widget.pendingRoomCode}',
+                    style: _T.mono(10, color: _C.accent, ls: 1.2),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Create your ChatMate ID to continue. The room creator '
+                    'still has to approve you.',
+                    style: _T.body(12.5, color: _C.muted, h: 1.4),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 22),
+          ],
           Text('CHOOSE YOUR HANDLE', style: _T.mono(11, ls: 1.8)),
           const SizedBox(height: 20),
           TextField(
@@ -351,10 +385,12 @@ class _CreateIdScreenState extends State<CreateIdScreen> {
             cursorColor: _C.accent,
             decoration: InputDecoration(
               hintText: 'nightowl_07',
-              hintStyle: _T.serif(26,
-                  color: _C.muted.withValues(alpha: 0.5),
-                  w: FontWeight.w400,
-                  style: FontStyle.italic),
+              hintStyle: _T.serif(
+                26,
+                color: _C.muted.withValues(alpha: 0.5),
+                w: FontWeight.w400,
+                style: FontStyle.italic,
+              ),
               prefixIcon: Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: Text(
@@ -362,13 +398,18 @@ class _CreateIdScreenState extends State<CreateIdScreen> {
                   style: _T.serif(26, color: _C.accent, w: FontWeight.w500),
                 ),
               ),
-              prefixIconConstraints:
-                  const BoxConstraints(minWidth: 24, minHeight: 24),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 18, horizontal: 4),
-enabledBorder: const UnderlineInputBorder(
-  borderSide: BorderSide(color: _C.line, width: 1.5),
-),              focusedBorder: const UnderlineInputBorder(
+              prefixIconConstraints: const BoxConstraints(
+                minWidth: 24,
+                minHeight: 24,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                vertical: 18,
+                horizontal: 4,
+              ),
+              enabledBorder: const UnderlineInputBorder(
+                borderSide: BorderSide(color: _C.line, width: 1.5),
+              ),
+              focusedBorder: const UnderlineInputBorder(
                 borderSide: BorderSide(color: _C.accent, width: 2),
               ),
             ),
@@ -383,15 +424,9 @@ enabledBorder: const UnderlineInputBorder(
                 ),
               ),
               if (_checking)
-                Text(
-                  'CHECKING',
-                  style: _T.mono(10, color: _C.muted, ls: 0.8),
-                )
+                Text('CHECKING', style: _T.mono(10, color: _C.muted, ls: 0.8))
               else if (_available == true)
-                Text(
-                  'AVAILABLE',
-                  style: _T.mono(10, color: _C.accent, ls: 0.8),
-                )
+                Text('AVAILABLE', style: _T.mono(10, color: _C.accent, ls: 0.8))
               else if (_available == false)
                 Text(
                   'TAKEN',
@@ -452,11 +487,7 @@ enabledBorder: const UnderlineInputBorder(
                     cursor: SystemMouseCursors.click,
                     child: Text(
                       'ADMIN ACCESS',
-                      style: _T.mono(
-                        10,
-                        color: _C.accent,
-                        ls: 1.2,
-                      ),
+                      style: _T.mono(10, color: _C.accent, ls: 1.2),
                     ),
                   ),
                 ),
@@ -478,9 +509,7 @@ enabledBorder: const UnderlineInputBorder(
         onTap: enabled ? _continue : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          color: !enabled
-              ? _C.line
-              : (_hover ? _C.accent : _C.ink),
+          color: !enabled ? _C.line : (_hover ? _C.accent : _C.ink),
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -502,8 +531,11 @@ enabledBorder: const UnderlineInputBorder(
                 AnimatedPadding(
                   duration: const Duration(milliseconds: 180),
                   padding: EdgeInsets.only(left: _hover ? 20 : 8),
-                  child: Icon(Icons.arrow_forward_rounded,
-                      size: 18, color: _C.bg),
+                  child: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: _C.bg,
+                  ),
                 ),
             ],
           ),
@@ -544,13 +576,15 @@ class _BackButtonState extends State<_BackButton> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.arrow_back_rounded,
-                  size: 16, color: _hover ? _C.bg : _C.ink),
+              Icon(
+                Icons.arrow_back_rounded,
+                size: 16,
+                color: _hover ? _C.bg : _C.ink,
+              ),
               const SizedBox(width: 8),
               Text(
                 'BACK',
-                style: _T.mono(11,
-                    color: _hover ? _C.bg : _C.ink, ls: 1.6),
+                style: _T.mono(11, color: _hover ? _C.bg : _C.ink, ls: 1.6),
               ),
             ],
           ),

@@ -49,6 +49,9 @@
 
   <link rel="manifest" href="manifest.json">
   <link rel="preload" as="image" href="icons/Icon-192.png">
+  <link rel="preload" as="script" href="main.dart.js">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://www.gstatic.com">
   <link rel="stylesheet" href="install.css">
   <script src="install.js"></script>
 </head>
@@ -61,7 +64,13 @@
     <p class="cm-boot__slogan">SAY IT. SIGN NOTHING. <span>WHERE TRUTHS UNRAVEL.</span></p>
   </div>
 
-  <!-- Install prompt. Opens shortly after load unless dismissed this session. -->
+  <!-- Persistent install tab: stays at the side until ChatMate is installed. -->
+  <button id="cm-install-fab" class="cm-fab" type="button" aria-label="Install ChatMate" title="Install ChatMate" hidden>
+    <span class="cm-fab__icon" aria-hidden="true">↓</span>
+    <span class="cm-fab__label" aria-hidden="true">INSTALL</span>
+  </button>
+
+  <!-- Install card. Opens from the side tab. -->
   <div id="cm-install" class="cm-install" aria-hidden="true">
     <section class="cm-card" role="dialog" aria-modal="true" aria-labelledby="cm-install-title" aria-describedby="cm-install-body" tabindex="-1">
       <button id="cm-install-close" class="cm-card__close" type="button" aria-label="Close install prompt">&times;</button>

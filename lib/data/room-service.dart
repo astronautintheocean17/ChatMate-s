@@ -12,6 +12,7 @@ class RoomService {
   static Future<RoomDetails> createRoom({
     required String name,
     required String visibility,
+    required String joinMode,
     required List<String> memberIds,
   }) async {
     final result = await _client.rpc(
@@ -19,6 +20,7 @@ class RoomService {
       params: {
         'p_name': name.trim(),
         'p_visibility': visibility,
+        'p_join_mode': joinMode,
         'p_member_ids': memberIds,
       },
     );
@@ -59,6 +61,23 @@ class RoomService {
     return RoomDetails.fromMap(Map<String, dynamic>.from(result as Map));
   }
 
+  static Future<RoomAccessPreview?> accessPreview(String code) async {
+    final result = await _client.rpc(
+      'room_access_preview',
+      params: {'p_code': code.trim().toUpperCase()},
+    );
+    if (result == null) return null;
+    return RoomAccessPreview.fromMap(Map<String, dynamic>.from(result as Map));
+  }
+
+  static Future<Map<String, dynamic>> joinRoomByCode(String code) async {
+    final result = await _client.rpc(
+      'join_room_by_code',
+      params: {'p_code': code.trim().toUpperCase()},
+    );
+    return Map<String, dynamic>.from(result as Map);
+  }
+
   static Future<List<RoomMember>> members(String roomId) async {
     final result = await _client.rpc(
       'room_members_list',
@@ -78,16 +97,16 @@ class RoomService {
         .toList();
   }
 
-  static Future<List<PendingRoomRequest>> pendingRequests(
-    String roomId,
-  ) async {
+  static Future<List<PendingRoomRequest>> pendingRequests(String roomId) async {
     final result = await _client.rpc(
       'room_pending_requests',
       params: {'p_room_id': roomId},
     );
     return (result as List)
         .whereType<Map>()
-        .map((row) => PendingRoomRequest.fromMap(Map<String, dynamic>.from(row)))
+        .map(
+          (row) => PendingRoomRequest.fromMap(Map<String, dynamic>.from(row)),
+        )
         .toList();
   }
 
@@ -110,14 +129,15 @@ class RoomService {
     return Map<String, dynamic>.from(result as Map);
   }
 
-  static Future<void> inviteMember({
+  static Future<Map<String, dynamic>> inviteMember({
     required String roomId,
     required String handle,
   }) async {
-    await _client.rpc(
+    final result = await _client.rpc(
       'invite_member',
       params: {'p_room_id': roomId, 'p_handle': handle},
     );
+    return Map<String, dynamic>.from(result as Map);
   }
 
   static Future<void> removeMember({
@@ -134,6 +154,7 @@ class RoomService {
     required String roomId,
     required String name,
     required String visibility,
+    required String joinMode,
   }) async {
     await _client.rpc(
       'update_room',
@@ -141,6 +162,7 @@ class RoomService {
         'p_room_id': roomId,
         'p_name': name.trim(),
         'p_visibility': visibility,
+        'p_join_mode': joinMode,
       },
     );
   }

@@ -94,9 +94,9 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
       }
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyError(error))));
     } finally {
       if (mounted) setState(() => _busy.remove(room.id));
     }
@@ -105,20 +105,17 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
   Future<void> _openChat(RoomSearchResult room) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => ChatRoomScreen(
-          roomId: room.id,
-          roomName: room.name,
-        ),
+        builder: (_) => ChatRoomScreen(roomId: room.id, roomName: room.name),
       ),
     );
     if (mounted) _runSearch(_controller.text);
   }
 
-
   @override
   Widget build(BuildContext context) {
-    final codeLike = RegExp(r'^[A-Z0-9]{6}$')
-        .hasMatch(_controller.text.trim().toUpperCase());
+    final codeLike = RegExp(
+      r'^[A-Z0-9]{6}$',
+    ).hasMatch(_controller.text.trim().toUpperCase());
     return Scaffold(
       backgroundColor: AppTheme.surface(context),
       appBar: AppBar(
@@ -130,11 +127,7 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
         ),
         title: Text(
           'JOIN A ROOM',
-          style: AppText.mono(
-            10,
-            color: AppTheme.muted(context),
-            ls: 1.8,
-          ),
+          style: AppText.mono(10, color: AppTheme.muted(context), ls: 1.8),
         ),
         centerTitle: false,
       ),
@@ -145,21 +138,13 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
           children: [
             Text(
               'Find your\npeople.',
-              style: AppText.serif(
-                38,
-                color: AppTheme.ink(context),
-                h: 0.98,
-              ),
+              style: AppText.serif(38, color: AppTheme.ink(context), h: 0.98),
             ),
             const SizedBox(height: 10),
             Text(
               'Search public rooms by name, or paste the six-character code '
               'for a private one.',
-              style: AppText.body(
-                13,
-                color: AppTheme.muted(context),
-                h: 1.55,
-              ),
+              style: AppText.body(13, color: AppTheme.muted(context), h: 1.55),
             ),
             const SizedBox(height: 26),
             TextField(
@@ -181,14 +166,14 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
                         ),
                       )
                     : (_controller.text.isEmpty
-                        ? null
-                        : IconButton(
-                            onPressed: () {
-                              _controller.clear();
-                              _runSearch('');
-                            },
-                            icon: const Icon(Icons.close_rounded, size: 17),
-                          )),
+                          ? null
+                          : IconButton(
+                              onPressed: () {
+                                _controller.clear();
+                                _runSearch('');
+                              },
+                              icon: const Icon(Icons.close_rounded, size: 17),
+                            )),
               ),
             ),
             const SizedBox(height: 10),
@@ -196,29 +181,20 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
               codeLike
                   ? 'CODE FORMAT · PRIVATE ROOMS INCLUDED'
                   : 'PUBLIC ROOMS · OR ENTER A FULL CODE',
-              style: AppText.mono(
-                8.5,
-                color: AppTheme.muted(context),
-                ls: 1.2,
-              ),
+              style: AppText.mono(8.5, color: AppTheme.muted(context), ls: 1.2),
             ),
             const SizedBox(height: 22),
             if (_error != null) ...[
               Text(
                 _error!,
-                style: AppText.body(
-                  12,
-                  color: AppTheme.accent(context),
-                ),
+                style: AppText.body(12, color: AppTheme.accent(context)),
               ),
               const SizedBox(height: 12),
             ],
             if (_loading && _results.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
               )
             else if (_results.isEmpty)
               _EmptyResults(query: _controller.text.trim())
@@ -251,7 +227,6 @@ class _JoinRoomScreenState extends State<JoinRoomScreen> {
   }
 }
 
-
 class _RoomResultTile extends StatelessWidget {
   const _RoomResultTile({
     required this.room,
@@ -274,8 +249,8 @@ class _RoomResultTile extends StatelessWidget {
     final label = room.isMember
         ? 'OPEN'
         : pending
-            ? 'REQUESTED'
-            : 'REQUEST';
+        ? 'REQUESTED'
+        : 'REQUEST';
 
     return Material(
       color: AppTheme.surface(context),
@@ -307,10 +282,7 @@ class _RoomResultTile extends StatelessWidget {
                       room.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppText.serif(
-                        20,
-                        color: AppTheme.ink(context),
-                      ),
+                      style: AppText.serif(20, color: AppTheme.ink(context)),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -326,7 +298,8 @@ class _RoomResultTile extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                '${room.memberCount} MEMBERS · BY @${room.creatorHandle}',
+                '${room.memberCount} MEMBERS · BY @${room.creatorHandle}'
+                ' · ${room.isOpenJoin ? 'OPEN LINK' : 'REQUEST ONLY'}',
                 style: AppText.mono(
                   8.5,
                   color: AppTheme.muted(context),
@@ -339,10 +312,7 @@ class _RoomResultTile extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'The creator approves every entry.',
-                      style: AppText.body(
-                        11,
-                        color: AppTheme.muted(context),
-                      ),
+                      style: AppText.body(11, color: AppTheme.muted(context)),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -394,7 +364,6 @@ class _RoomResultTile extends StatelessWidget {
   }
 }
 
-
 class _EmptyResults extends StatelessWidget {
   const _EmptyResults({required this.query});
 
@@ -420,18 +389,13 @@ class _EmptyResults extends StatelessWidget {
           Text(
             query.isEmpty
                 ? 'Private rooms never show up here. Ask for their code, or '
-                    'create the first public room.'
+                      'create the first public room.'
                 : 'Check the spelling, or paste the exact six-character code '
-                    'if you were invited to a private room.',
-            style: AppText.body(
-              12.5,
-              color: AppTheme.muted(context),
-              h: 1.5,
-            ),
+                      'if you were invited to a private room.',
+            style: AppText.body(12.5, color: AppTheme.muted(context), h: 1.5),
           ),
         ],
       ),
     );
   }
 }
-

@@ -1,22 +1,22 @@
 /*
  * ChatMate install prompt.
  *
- * Deliberately small: show the popup shortly after load, install with the
- * browser's native prompt, or say the installer is not ready. Closing it
- * lasts for this tab session only.
+ * A persistent install tab stays at the side of the app until ChatMate is
+ * installed. Tapping it starts the browser installer immediately when Chrome/
+ * Edge has offered it; otherwise it opens the branded install card.
  *
  * web/flutter_bootstrap.js does not register Flutter's generated service
  * worker (it unregisters itself). web/service-worker.js keeps the origin
- * installable.
+ * installable and runtime-caches large static assets.
  */
 (function () {
   'use strict';
 
-  var DISMISS_KEY = 'chatmate.installDismissed';
   var deferredPrompt = null;
   var installed = false;
   var modal = null;
   var card = null;
+  var fab = null;
   var installButton = null;
   var status = null;
 
@@ -25,6 +25,14 @@
       (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
       window.navigator.standalone === true
     );
+  }
+
+  function showFab() {
+    if (fab && !installed) fab.hidden = false;
+  }
+
+  function hideFab() {
+    if (fab) fab.hidden = true;
   }
 
   function show() {
@@ -56,17 +64,12 @@
   }
 
   function dismiss() {
-    if (!modal || !modal.classList.contains('is-open')) return;
     hide();
-    try {
-      window.sessionStorage.setItem(DISMISS_KEY, 'true');
-    } catch (error) {
-      /* Storage can be blocked; closing still works for this page. */
-    }
   }
 
   async function install() {
     if (!deferredPrompt) {
+      show();
       setStatus("Use your browser's Install or Add to Home Screen option.");
       return;
     }
@@ -79,16 +82,24 @@
       if (choice && choice.outcome === 'accepted') {
         installed = true;
         hide();
-        try {
-          window.sessionStorage.removeItem(DISMISS_KEY);
-        } catch (error) {
-          /* Nothing to clean up. */
-        }
+        hideFab();
       }
     } catch (error) {
+      show();
+      setStatus("Couldn't open the installer. Use your browser menu.");
       if (window.console && window.console.warn) {
         window.console.warn('[ChatMate] Install prompt failed.', error);
       }
+    }
+  }
+
+  function startInstall() {
+    if (installed) return;
+    if (deferredPrompt) {
+      install();
+    } else {
+      show();
+      setStatus("Use your browser's Install or Add to Home Screen option.");
     }
   }
 
@@ -96,11 +107,13 @@
     modal = document.getElementById('cm-install');
     installButton = document.getElementById('cm-install-action');
     status = document.getElementById('cm-install-status');
+    fab = document.getElementById('cm-install-fab');
     var closeButton = document.getElementById('cm-install-close');
     card = modal && modal.querySelector('.cm-card');
     if (!modal || !card || !installButton || !closeButton) return false;
 
     installButton.addEventListener('click', install);
+    if (fab) fab.addEventListener('click', startInstall);
     closeButton.addEventListener('click', dismiss);
     modal.addEventListener('click', function (event) {
       if (event.target === modal) dismiss();
@@ -122,16 +135,12 @@
 
   function init() {
     installed = isStandalone();
-    if (!bind() || installed) return;
-
-    var dismissed = false;
-    try {
-      dismissed = window.sessionStorage.getItem(DISMISS_KEY) === 'true';
-    } catch (error) {
-      /* Treat blocked storage as not dismissed. */
+    if (!bind()) return;
+    if (installed) {
+      hideFab();
+      return;
     }
-
-    if (!dismissed) window.setTimeout(show, 1500);
+    showFab();
   }
 
   window.addEventListener('beforeinstallprompt', function (event) {
@@ -139,18 +148,13 @@
     if (installed) return;
     deferredPrompt = event;
     clearStatus();
-    show();
   });
 
   window.addEventListener('appinstalled', function () {
     installed = true;
     deferredPrompt = null;
     hide();
-    try {
-      window.sessionStorage.removeItem(DISMISS_KEY);
-    } catch (error) {
-      /* Nothing to clean up. */
-    }
+    hideFab();
   });
 
   window.addEventListener('flutter-first-frame', hideBoot);
@@ -170,6 +174,7 @@
       if (event.matches) {
         installed = true;
         hide();
+        hideFab();
       }
     };
     if (standaloneQuery.addEventListener) {

@@ -22,6 +22,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
   List<Profile> _suggestions = const [];
   Timer? _debounce;
   String _visibility = 'private';
+  String _joinMode = 'request';
   bool _creating = false;
   bool _searching = false;
   String? _error;
@@ -109,18 +110,17 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
       final room = await RoomService.createRoom(
         name: name,
         visibility: _visibility,
+        joinMode: _joinMode,
         memberIds: memberIds,
       );
 
-      final unresolved =
-          _invited.entries.where((entry) => entry.value == null).toList();
+      final unresolved = _invited.entries
+          .where((entry) => entry.value == null)
+          .toList();
       final failures = <String>[];
       for (final entry in unresolved) {
         try {
-          await RoomService.inviteMember(
-            roomId: room.id,
-            handle: entry.key,
-          );
+          await RoomService.inviteMember(roomId: room.id, handle: entry.key);
         } catch (_) {
           failures.add('@${entry.key}');
         }
@@ -138,10 +138,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
       );
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => ChatRoomScreen(
-            roomId: room.id,
-            roomName: room.name,
-          ),
+          builder: (_) => ChatRoomScreen(roomId: room.id, roomName: room.name),
         ),
       );
     } catch (error) {
@@ -151,7 +148,6 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
       if (mounted) setState(() => _creating = false);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -166,11 +162,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
         ),
         title: Text(
           'NEW ROOM',
-          style: AppText.mono(
-            10,
-            color: AppTheme.muted(context),
-            ls: 1.8,
-          ),
+          style: AppText.mono(10, color: AppTheme.muted(context), ls: 1.8),
         ),
         centerTitle: false,
       ),
@@ -181,21 +173,13 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
           children: [
             Text(
               'Make space\nfor honesty.',
-              style: AppText.serif(
-                38,
-                color: AppTheme.ink(context),
-                h: 0.98,
-              ),
+              style: AppText.serif(38, color: AppTheme.ink(context), h: 0.98),
             ),
             const SizedBox(height: 10),
             Text(
               'You choose who gets in. Nobody sees who said what unless the '
               'sender chooses to reveal it.',
-              style: AppText.body(
-                13,
-                color: AppTheme.muted(context),
-                h: 1.55,
-              ),
+              style: AppText.body(13, color: AppTheme.muted(context), h: 1.55),
             ),
             const SizedBox(height: 30),
             const _SectionLabel('ROOM NAME'),
@@ -239,6 +223,43 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+            const _SectionLabel('HOW PEOPLE JOIN'),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _JoinModeOption(
+                    title: 'Open link',
+                    caption: 'Members can add people. You verify every ask.',
+                    icon: Icons.link_rounded,
+                    selected: _joinMode == 'open',
+                    onTap: () => setState(() => _joinMode = 'open'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _JoinModeOption(
+                    title: 'Request only',
+                    caption:
+                        'Only you can add people. Link asks still reach you.',
+                    icon: Icons.how_to_reg_rounded,
+                    selected: _joinMode == 'request',
+                    onTap: () => setState(() => _joinMode = 'request'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Either way, you approve every person before they can open the '
+              'room.',
+              style: AppText.body(
+                11.5,
+                color: AppTheme.muted(context),
+                h: 1.45,
+              ),
+            ),
 
             const SizedBox(height: 26),
             const _SectionLabel('INVITE PEOPLE'),
@@ -246,11 +267,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
             Text(
               'Optional. Invited people must accept before they can join. '
               'You can also invite them later from room info.',
-              style: AppText.body(
-                12,
-                color: AppTheme.muted(context),
-                h: 1.45,
-              ),
+              style: AppText.body(12, color: AppTheme.muted(context), h: 1.45),
             ),
             const SizedBox(height: 10),
             Row(
@@ -325,10 +342,7 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
               const SizedBox(height: 16),
               Text(
                 _error!,
-                style: AppText.body(
-                  12,
-                  color: AppTheme.accent(context),
-                ),
+                style: AppText.body(12, color: AppTheme.accent(context)),
               ),
             ],
             const SizedBox(height: 30),
@@ -355,23 +369,15 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
                       )
                     : Text(
                         'CREATE ROOM',
-                        style: AppText.mono(
-                          10,
-                          color: Colors.white,
-                          ls: 1.4,
-                        ),
+                        style: AppText.mono(10, color: Colors.white, ls: 1.4),
                       ),
               ),
             ),
             const SizedBox(height: 16),
             Text(
-              'PRIVATE ROOMS ARE HIDDEN FROM SEARCH. A 6-CHARACTER CODE IS '
-              'GENERATED FOR EVERY ROOM.',
-              style: AppText.mono(
-                8,
-                color: AppTheme.muted(context),
-                ls: 1.2,
-              ),
+              'PRIVATE ROOMS ARE HIDDEN FROM SEARCH. EVERY ROOM GETS A '
+              'SHAREABLE LINK AND CODE. YOU APPROVE EVERY ENTRY.',
+              style: AppText.mono(8, color: AppTheme.muted(context), ls: 1.2),
             ),
           ],
         ),
@@ -379,7 +385,6 @@ class _CreateRoomScreenState extends State<CreateRoomScreen> {
     );
   }
 }
-
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.text);
@@ -390,10 +395,89 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       text,
-      style: AppText.mono(
-        9,
-        color: AppTheme.muted(context),
-        ls: 1.4,
+      style: AppText.mono(9, color: AppTheme.muted(context), ls: 1.4),
+    );
+  }
+}
+
+class _JoinModeOption extends StatelessWidget {
+  const _JoinModeOption({
+    required this.title,
+    required this.caption,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String caption;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppTheme.accent(context);
+    return Material(
+      color: selected
+          ? accent.withValues(alpha: 0.06)
+          : AppTheme.surface(context),
+      borderRadius: BorderRadius.circular(9),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(11, 10, 11, 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(
+              color: selected ? accent : AppTheme.line(context),
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: selected ? accent : AppTheme.muted(context),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title.toUpperCase(),
+                      style: AppText.mono(
+                        8.5,
+                        color: selected ? accent : AppTheme.ink(context),
+                        ls: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      caption,
+                      style: AppText.body(
+                        10.5,
+                        color: AppTheme.muted(context),
+                        h: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                selected
+                    ? Icons.radio_button_checked_rounded
+                    : Icons.radio_button_off_rounded,
+                size: 15,
+                color: selected ? accent : AppTheme.line(context),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -451,10 +535,7 @@ class _VisibilityCard extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 title,
-                style: AppText.serif(
-                  18,
-                  color: AppTheme.ink(context),
-                ),
+                style: AppText.serif(18, color: AppTheme.ink(context)),
               ),
               const SizedBox(height: 3),
               Text(
@@ -472,7 +553,6 @@ class _VisibilityCard extends StatelessWidget {
     );
   }
 }
-
 
 class _SuggestionTile extends StatelessWidget {
   const _SuggestionTile({required this.profile, required this.onTap});
@@ -519,18 +599,10 @@ class _SuggestionTile extends StatelessWidget {
             const SizedBox(width: 10),
             Text(
               'ADD',
-              style: AppText.mono(
-                8,
-                color: AppTheme.accent(context),
-                ls: 1.2,
-              ),
+              style: AppText.mono(8, color: AppTheme.accent(context), ls: 1.2),
             ),
             const SizedBox(width: 4),
-            Icon(
-              Icons.add_rounded,
-              size: 15,
-              color: AppTheme.accent(context),
-            ),
+            Icon(Icons.add_rounded, size: 15, color: AppTheme.accent(context)),
           ],
         ),
       ),
@@ -563,21 +635,13 @@ class _InviteChip extends StatelessWidget {
         children: [
           Text(
             '@$handle',
-            style: AppText.mono(
-              9,
-              color: AppTheme.ink(context),
-              ls: 0.3,
-            ),
+            style: AppText.mono(9, color: AppTheme.ink(context), ls: 0.3),
           ),
           if (pending) ...[
             const SizedBox(width: 6),
             Text(
               'PENDING',
-              style: AppText.mono(
-                7,
-                color: AppTheme.muted(context),
-                ls: 0.8,
-              ),
+              style: AppText.mono(7, color: AppTheme.muted(context), ls: 0.8),
             ),
           ],
           const SizedBox(width: 2),
@@ -598,4 +662,3 @@ class _InviteChip extends StatelessWidget {
     );
   }
 }
-

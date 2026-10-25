@@ -8,6 +8,8 @@ DateTime? _parseDate(dynamic value) {
 
 int _parseInt(dynamic value) => (value as num?)?.toInt() ?? 0;
 
+String _parseJoinMode(dynamic value) => value == 'open' ? 'open' : 'request';
+
 class Profile {
   final String id;
   final String handle;
@@ -34,6 +36,7 @@ class RoomSummary {
   final String name;
   final String code;
   final String visibility;
+  final String joinMode;
   final String creatorHandle;
   final String role;
   final int memberCount;
@@ -45,6 +48,7 @@ class RoomSummary {
     required this.name,
     required this.code,
     required this.visibility,
+    required this.joinMode,
     required this.creatorHandle,
     required this.role,
     required this.memberCount,
@@ -54,18 +58,20 @@ class RoomSummary {
 
   bool get isCreator => role == 'creator';
   bool get isPrivate => visibility == 'private';
+  bool get isOpenJoin => joinMode == 'open';
 
   factory RoomSummary.fromMap(Map<String, dynamic> map) => RoomSummary(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        code: map['code'] as String,
-        visibility: map['visibility'] as String,
-        creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
-        role: map['role'] as String? ?? 'member',
-        memberCount: _parseInt(map['member_count']),
-        unreadCount: _parseInt(map['unread_count']),
-        lastMessageAt: _parseDate(map['last_message_at']),
-      );
+    id: map['id'] as String,
+    name: map['name'] as String,
+    code: map['code'] as String,
+    visibility: map['visibility'] as String,
+    joinMode: _parseJoinMode(map['join_mode']),
+    creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
+    role: map['role'] as String? ?? 'member',
+    memberCount: _parseInt(map['member_count']),
+    unreadCount: _parseInt(map['unread_count']),
+    lastMessageAt: _parseDate(map['last_message_at']),
+  );
 }
 
 class RoomSearchResult {
@@ -73,6 +79,7 @@ class RoomSearchResult {
   final String name;
   final String code;
   final String visibility;
+  final String joinMode;
   final String creatorHandle;
   final int memberCount;
   final bool isMember;
@@ -83,6 +90,7 @@ class RoomSearchResult {
     required this.name,
     required this.code,
     required this.visibility,
+    required this.joinMode,
     required this.creatorHandle,
     required this.memberCount,
     required this.isMember,
@@ -90,6 +98,7 @@ class RoomSearchResult {
   });
 
   bool get isPrivate => visibility == 'private';
+  bool get isOpenJoin => joinMode == 'open';
   bool get isPending => requestStatus == 'pending';
 
   factory RoomSearchResult.fromMap(Map<String, dynamic> map) =>
@@ -98,17 +107,20 @@ class RoomSearchResult {
         name: map['name'] as String,
         code: map['code'] as String,
         visibility: map['visibility'] as String,
+        joinMode: _parseJoinMode(map['join_mode']),
         creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
         memberCount: _parseInt(map['member_count']),
         isMember: map['is_member'] == true,
         requestStatus: map['request_status'] as String?,
       );
 }
+
 class RoomDetails {
   final String id;
   final String name;
   final String code;
   final String visibility;
+  final String joinMode;
   final String creatorId;
   final String creatorHandle;
   final int memberCount;
@@ -120,6 +132,7 @@ class RoomDetails {
     required this.name,
     required this.code,
     required this.visibility,
+    required this.joinMode,
     required this.creatorId,
     required this.creatorHandle,
     required this.memberCount,
@@ -129,18 +142,20 @@ class RoomDetails {
 
   bool get isCreator => role == 'creator';
   bool get isPrivate => visibility == 'private';
+  bool get isOpenJoin => joinMode == 'open';
 
   factory RoomDetails.fromMap(Map<String, dynamic> map) => RoomDetails(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        code: map['code'] as String,
-        visibility: map['visibility'] as String,
-        creatorId: map['creator_id'] as String,
-        creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
-        memberCount: _parseInt(map['member_count']),
-        role: map['my_role'] as String? ?? 'member',
-        createdAt: _parseDate(map['created_at']),
-      );
+    id: map['id'] as String,
+    name: map['name'] as String,
+    code: map['code'] as String,
+    visibility: map['visibility'] as String,
+    joinMode: _parseJoinMode(map['join_mode']),
+    creatorId: map['creator_id'] as String,
+    creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
+    memberCount: _parseInt(map['member_count']),
+    role: map['my_role'] as String? ?? 'member',
+    createdAt: _parseDate(map['created_at']),
+  );
 }
 
 class RoomMember {
@@ -159,11 +174,11 @@ class RoomMember {
   bool get isCreator => role == 'creator';
 
   factory RoomMember.fromMap(Map<String, dynamic> map) => RoomMember(
-        userId: map['user_id'] as String,
-        handle: (map['handle'] as String? ?? '').toLowerCase(),
-        role: map['role'] as String? ?? 'member',
-        joinedAt: _parseDate(map['joined_at']),
-      );
+    userId: map['user_id'] as String,
+    handle: (map['handle'] as String? ?? '').toLowerCase(),
+    role: map['role'] as String? ?? 'member',
+    joinedAt: _parseDate(map['joined_at']),
+  );
 }
 
 class RoomRequestItem {
@@ -176,6 +191,7 @@ class RoomRequestItem {
   final String kind;
   final String status;
   final String otherHandle;
+  final bool creatorApproved;
   final DateTime? createdAt;
 
   const RoomRequestItem({
@@ -188,48 +204,108 @@ class RoomRequestItem {
     required this.kind,
     required this.status,
     required this.otherHandle,
+    required this.creatorApproved,
     required this.createdAt,
   });
 
   bool get isInvite => kind == 'invite';
   bool get isPending => status == 'pending';
   bool get isAccepted => status == 'accepted';
+  bool get needsCreatorApproval => isInvite && isPending && !creatorApproved;
 
   factory RoomRequestItem.fromMap(Map<String, dynamic> map) => RoomRequestItem(
-        requestId: map['request_id'] as String,
-        roomId: map['room_id'] as String,
-        roomName: map['room_name'] as String,
-        roomCode: map['room_code'] as String,
-        visibility: map['visibility'] as String,
-        memberCount: _parseInt(map['member_count']),
-        kind: map['kind'] as String,
-        status: map['status'] as String,
-        otherHandle: (map['other_handle'] as String? ?? '').toLowerCase(),
-        createdAt: _parseDate(map['created_at']),
-      );
+    requestId: map['request_id'] as String,
+    roomId: map['room_id'] as String,
+    roomName: map['room_name'] as String,
+    roomCode: map['room_code'] as String,
+    visibility: map['visibility'] as String,
+    memberCount: _parseInt(map['member_count']),
+    kind: map['kind'] as String,
+    status: map['status'] as String,
+    otherHandle: (map['other_handle'] as String? ?? '').toLowerCase(),
+    creatorApproved: map['creator_approved'] != false,
+    createdAt: _parseDate(map['created_at']),
+  );
 }
 
 class PendingRoomRequest {
   final String requestId;
   final String kind;
   final String handle;
+  final String createdByHandle;
+  final bool creatorApproved;
   final DateTime? createdAt;
 
   const PendingRoomRequest({
     required this.requestId,
     required this.kind,
     required this.handle,
+    required this.createdByHandle,
+    required this.creatorApproved,
     required this.createdAt,
   });
 
   bool get isInvite => kind == 'invite';
+  bool get isAwaitingCreator => isInvite && !creatorApproved;
 
   factory PendingRoomRequest.fromMap(Map<String, dynamic> map) =>
       PendingRoomRequest(
         requestId: map['request_id'] as String,
         kind: map['kind'] as String,
         handle: (map['user_handle'] as String? ?? '').toLowerCase(),
+        createdByHandle: (map['created_by_handle'] as String? ?? '')
+            .toLowerCase(),
+        creatorApproved: map['creator_approved'] != false,
         createdAt: _parseDate(map['created_at']),
+      );
+}
+
+class RoomAccessPreview {
+  final String id;
+  final String name;
+  final String code;
+  final String visibility;
+  final String joinMode;
+  final String creatorHandle;
+  final int memberCount;
+  final bool isMember;
+  final String? requestStatus;
+  final String? requestKind;
+  final bool creatorApproved;
+
+  const RoomAccessPreview({
+    required this.id,
+    required this.name,
+    required this.code,
+    required this.visibility,
+    required this.joinMode,
+    required this.creatorHandle,
+    required this.memberCount,
+    required this.isMember,
+    required this.requestStatus,
+    required this.requestKind,
+    required this.creatorApproved,
+  });
+
+  bool get isPrivate => visibility == 'private';
+  bool get isOpenJoin => joinMode == 'open';
+  bool get isPending => requestStatus == 'pending';
+  bool get needsCreatorApproval =>
+      isPending && requestKind == 'invite' && !creatorApproved;
+
+  factory RoomAccessPreview.fromMap(Map<String, dynamic> map) =>
+      RoomAccessPreview(
+        id: map['id'] as String,
+        name: map['name'] as String,
+        code: map['code'] as String,
+        visibility: map['visibility'] as String,
+        joinMode: _parseJoinMode(map['join_mode']),
+        creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
+        memberCount: _parseInt(map['member_count']),
+        isMember: map['is_member'] == true,
+        requestStatus: map['request_status'] as String?,
+        requestKind: map['request_kind'] as String?,
+        creatorApproved: map['request_creator_approved'] != false,
       );
 }
 
@@ -257,20 +333,18 @@ class ChatMessage {
   });
 
   factory ChatMessage.fromMap(Map<String, dynamic> map) => ChatMessage(
-        id: map['id'] as String,
-        roomId: map['room_id'] as String,
-        text: (map['body'] as String?) ?? '',
-        createdAt: _parseDate(map['created_at']) ?? DateTime.now(),
-        isMine: map['is_mine'] == true,
-        isDeleted: map['is_deleted'] == true,
-        revealSender: map['reveal_sender'] == true,
-        senderHandle: map['sender_handle'] == null
-            ? null
-            : (map['sender_handle'] as String).toLowerCase(),
-        seenCount: map['seen_count'] == null
-            ? null
-            : _parseInt(map['seen_count']),
-      );
+    id: map['id'] as String,
+    roomId: map['room_id'] as String,
+    text: (map['body'] as String?) ?? '',
+    createdAt: _parseDate(map['created_at']) ?? DateTime.now(),
+    isMine: map['is_mine'] == true,
+    isDeleted: map['is_deleted'] == true,
+    revealSender: map['reveal_sender'] == true,
+    senderHandle: map['sender_handle'] == null
+        ? null
+        : (map['sender_handle'] as String).toLowerCase(),
+    seenCount: map['seen_count'] == null ? null : _parseInt(map['seen_count']),
+  );
 }
 
 class SeenReceipt {
@@ -280,9 +354,9 @@ class SeenReceipt {
   const SeenReceipt({required this.seen, required this.members});
 
   factory SeenReceipt.fromMap(Map<String, dynamic> map) => SeenReceipt(
-        seen: _parseInt(map['seen']),
-        members: _parseInt(map['members']),
-      );
+    seen: _parseInt(map['seen']),
+    members: _parseInt(map['members']),
+  );
 }
 
 class AdminStats {
@@ -301,12 +375,12 @@ class AdminStats {
   });
 
   factory AdminStats.fromMap(Map<String, dynamic> map) => AdminStats(
-        users: _parseInt(map['users']),
-        rooms: _parseInt(map['rooms']),
-        messages: _parseInt(map['messages']),
-        privateRooms: _parseInt(map['private_rooms']),
-        publicRooms: _parseInt(map['public_rooms']),
-      );
+    users: _parseInt(map['users']),
+    rooms: _parseInt(map['rooms']),
+    messages: _parseInt(map['messages']),
+    privateRooms: _parseInt(map['private_rooms']),
+    publicRooms: _parseInt(map['public_rooms']),
+  );
 }
 
 class AdminUser {
@@ -325,12 +399,12 @@ class AdminUser {
   });
 
   factory AdminUser.fromMap(Map<String, dynamic> map) => AdminUser(
-        id: map['id'] as String,
-        handle: (map['handle'] as String? ?? '').toLowerCase(),
-        createdAt: _parseDate(map['created_at']),
-        roomCount: _parseInt(map['room_count']),
-        messageCount: _parseInt(map['message_count']),
-      );
+    id: map['id'] as String,
+    handle: (map['handle'] as String? ?? '').toLowerCase(),
+    createdAt: _parseDate(map['created_at']),
+    roomCount: _parseInt(map['room_count']),
+    messageCount: _parseInt(map['message_count']),
+  );
 }
 
 class AdminRoom {
@@ -357,15 +431,15 @@ class AdminRoom {
   bool get isPrivate => visibility == 'private';
 
   factory AdminRoom.fromMap(Map<String, dynamic> map) => AdminRoom(
-        id: map['id'] as String,
-        name: map['name'] as String,
-        code: map['code'] as String,
-        visibility: map['visibility'] as String,
-        creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
-        memberCount: _parseInt(map['member_count']),
-        messageCount: _parseInt(map['message_count']),
-        createdAt: _parseDate(map['created_at']),
-      );
+    id: map['id'] as String,
+    name: map['name'] as String,
+    code: map['code'] as String,
+    visibility: map['visibility'] as String,
+    creatorHandle: (map['creator_handle'] as String? ?? '').toLowerCase(),
+    memberCount: _parseInt(map['member_count']),
+    messageCount: _parseInt(map['message_count']),
+    createdAt: _parseDate(map['created_at']),
+  );
 }
 
 class AdminRoomSnapshot {
@@ -398,4 +472,3 @@ class AdminRoomSnapshot {
     );
   }
 }
-

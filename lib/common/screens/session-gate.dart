@@ -5,8 +5,10 @@ import '../../admin/screens/dashboard-screen.dart';
 import '../../data/auth-service.dart';
 import '../../data/errors.dart';
 import '../../data/profile-service.dart';
+import '../../data/room-link-service.dart';
 import '../../theme/app-theme.dart';
 import '../../users/screens/home-screen.dart';
+import '../../users/screens/room-invite-screen.dart';
 import 'create-id-screen.dart';
 import 'landing-screen.dart';
 
@@ -37,9 +39,15 @@ class _SessionGateState extends State<SessionGate> {
     });
 
     try {
+      final inviteCode = RoomLinkService.codeFromCurrentUrl();
+
       if (!AuthService.hasSession || AuthService.currentUser == null) {
         if (!mounted) return;
-        setState(() => _destination = const LandingScreen());
+        setState(() {
+          _destination = inviteCode == null
+              ? const LandingScreen()
+              : CreateIdScreen(pendingRoomCode: inviteCode);
+        });
         return;
       }
 
@@ -52,8 +60,13 @@ class _SessionGateState extends State<SessionGate> {
       final profile = await ProfileService.current();
       if (!mounted) return;
       setState(() {
-        _destination =
-            profile == null ? const CreateIdScreen() : const HomeScreen();
+        if (profile == null) {
+          _destination = CreateIdScreen(pendingRoomCode: inviteCode);
+        } else if (inviteCode != null) {
+          _destination = RoomInviteScreen(code: inviteCode);
+        } else {
+          _destination = const HomeScreen();
+        }
       });
     } catch (error) {
       if (!mounted) return;
@@ -75,10 +88,7 @@ class _SessionGateState extends State<SessionGate> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'CHATMATE',
-              style: AppText.mono(12, color: accent, ls: 3),
-            ),
+            Text('CHATMATE', style: AppText.mono(12, color: accent, ls: 3)),
             const SizedBox(height: 10),
             Text(
               'Every room has a secret.',
