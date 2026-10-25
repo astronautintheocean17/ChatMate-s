@@ -1,18 +1,92 @@
-# chatmate
+# ChatMate
 
-A new Flutter project.
+**Every room has a secret. Say it. Sign nothing.**
 
-## Getting Started
+<img src="assets/logo/ChatMate-logo.png" alt="ChatMate — Where truths unravel." width="180" align="right">
 
-This project is a starting point for a Flutter application.
+ChatMate is anonymous room chat for students, teams, hostels, friend groups
+and anyone who needs a private place to speak honestly. Create an ID, join the
+rooms you belong to, and say what needs saying without your name attached. The
+sender of a message is never revealed — not to other members, not to room
+admins, not to anyone.
 
-A few resources to get you started if this is your first Flutter project:
+**Where truths unravel.**
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## The idea
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-# ChatMate-s
+A name makes people careful. A mask makes them honest. ChatMate separates
+belonging from speaking: your ID gets you into a room, but it never travels
+with the messages you send. Every room is its own circle, with its own people,
+its own code and its own secrets.
+
+- Create a public or private room in seconds.
+- Join by search or with a six-character room code.
+- Invite people directly; they accept before they enter.
+- Send, reply, react, edit and delete — always without a sender attached.
+- Reveal your handle only when you deliberately choose to.
+- See typing state and read receipts without exposing identity.
+
+## Running the app
+
+```bash
+flutter pub get
+flutter run -d chrome
+```
+
+Supabase is configured through `lib/supabase-config.dart` and the compile-time
+`SUPABASE_URL` / `SUPABASE_ANON_KEY` dart-defines. Follow
+[`supabase/SETUP.md`](supabase/SETUP.md) for the database schema, anonymous
+sign-ins, admin account and environment setup.
+
+Never put a `service_role` key in the Flutter app. Only the public anon or
+publishable key belongs here.
+
+## Web installation
+
+The web build is a full PWA. It includes:
+
+- Branded title, description, Open Graph and Twitter metadata.
+- A generated web manifest with 192px, 512px and maskable icons.
+- A branded loading screen carrying the ChatMate quote and slogan.
+- `web/install.js` + `web/install.css`: a small branded install popup. It opens
+  1.5 seconds after load unless ChatMate is already running as an installed app
+  or the visitor closed it this session. The single **Install to device** button
+  calls the browser's native installer; if the browser has not offered it yet,
+  the popup says so and stays open. Closing the popup lasts for the tab session
+  only.
+- `web/flutter_bootstrap.js` + `web/service-worker.js`: disable Flutter's
+  generated worker (it unregisters itself) and register a pass-through fetch
+  handler so Chromium keeps the app installable.
+
+Build and serve over HTTPS (or localhost) for the browser to offer install:
+
+```bash
+flutter build web --release
+```
+
+Chrome and Edge expose the native install flow. On a first visit Chrome may need
+about 30 seconds of engagement before it offers the installer; the popup still
+opens, and the button works as soon as the browser is ready. Safari and Firefox
+have no programmatic install API, so the popup falls back to the browser's own
+Install or Add to Home Screen option.
+
+## Launcher icons
+
+`assets/logo/ChatMate-logo.png` is the single source of truth for Android, iOS,
+macOS, Windows and web icons. After changing the logo, regenerate everything:
+
+```bash
+dart run flutter_launcher_icons
+```
+
+## Checks
+
+```bash
+flutter analyze
+flutter test
+flutter build web
+```
+
+The app targets Flutter with Supabase Auth/Postgres/Realtime. See
+`supabase/0001_init.sql` and `supabase/SETUP.md` for the backend contract.
+

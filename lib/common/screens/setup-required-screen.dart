@@ -60,6 +60,11 @@ class SetupRequiredScreen extends StatelessWidget {
                       style: AppText.mono(11, color: muted, ls: 0.2),
                     ),
                   ],
+                  const SizedBox(height: 22),
+                  Text(
+                    'EVERY ROOM HAS A SECRET. SAY IT. SIGN NOTHING.',
+                    style: AppText.mono(9.5, color: muted, ls: 1.2),
+                  ),
                 ],
               ),
             ),

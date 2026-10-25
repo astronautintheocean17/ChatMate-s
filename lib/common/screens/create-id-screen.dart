@@ -230,7 +230,7 @@ class _CreateIdScreenState extends State<CreateIdScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            'CHATMATE _ SENDER NEVER REVEALED',
+                            'CHATMATE _ SAY IT. SIGN NOTHING. _ WHERE TRUTHS UNRAVEL.',
                             style: _T.mono(10.5, color: _C.muted, ls: 1.6),
                             overflow: TextOverflow.ellipsis,
                           ),

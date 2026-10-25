@@ -79,6 +79,11 @@ class _SessionGateState extends State<SessionGate> {
               'CHATMATE',
               style: AppText.mono(12, color: accent, ls: 3),
             ),
+            const SizedBox(height: 10),
+            Text(
+              'Every room has a secret.',
+              style: AppText.serif(24, color: ink, h: 1.1),
+            ),
             const SizedBox(height: 18),
             if (_error == null)
               const SizedBox(

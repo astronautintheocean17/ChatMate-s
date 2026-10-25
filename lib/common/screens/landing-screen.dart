@@ -191,7 +191,7 @@ class _LandingScreenState extends State<LandingScreen> {
     final left = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _eyebrow('ANONYMOUS ROOM CHAT _ FOR STUDENTS & COLLEAGUES'),
+        _eyebrow('EVERY ROOM HAS A SECRET _ FOR STUDENTS & COLLEAGUES'),
         SizedBox(height: wide ? 28 : 20),
         FittedBox(
           fit: BoxFit.scaleDown,
@@ -1197,7 +1197,7 @@ class _LandingScreenState extends State<LandingScreen> {
     final left = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _eyebrow('ANONYMOUS ROOM CHAT _ FOR STUDENTS & COLLEAGUES'),
+        _eyebrow('EVERY ROOM HAS A SECRET _ FOR STUDENTS & COLLEAGUES'),
         SizedBox(height: wide ? 28 : 20),
         FittedBox(
           fit: BoxFit.scaleDown,

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -8,31 +8,101 @@
     The path provided below has to start and end with a slash "/" in order for
     it to work correctly.
 
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
     This is a placeholder for base href that will be replaced by the value of
     the `--base-href` argument provided to `flutter build`.
   -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
 
-  <!-- iOS meta tags & icons -->
+  <title>ChatMate — Say it. Sign nothing.</title>
+  <meta name="description" content="ChatMate is anonymous room chat for students, teams, hostels and circles. Every room has a secret. Create your ID, join your people, and speak without your name attached. Where truths unravel.">
+  <meta name="application-name" content="ChatMate">
+  <meta name="theme-color" content="#0E7A3A">
+  <meta name="color-scheme" content="light">
+
+  <!-- Open Graph / social preview -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ChatMate">
+  <meta property="og:title" content="ChatMate — Say it. Sign nothing.">
+  <meta property="og:description" content="Every room has a secret. Anonymous room chat for your class, team, hostel or circle. No names on messages. Ever.">
+  <meta property="og:image" content="icons/Icon-512.png">
+  <meta property="og:image:alt" content="ChatMate — Where truths unravel.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="ChatMate — Say it. Sign nothing.">
+  <meta name="twitter:description" content="Every room has a secret. Anonymous room chat for your people. Where truths unravel.">
+  <meta name="twitter:image" content="icons/Icon-512.png">
+
+  <!-- iOS / install metadata -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="chatmate">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="ChatMate">
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/png" href="favicon.png"/>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/Icon-192.png">
 
-  <title>chatmate</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="preload" as="image" href="icons/Icon-192.png">
+  <link rel="stylesheet" href="install.css">
+  <script src="install.js"></script>
 </head>
 <body>
+  <!-- Branded boot state. Replaced by the first Flutter frame. -->
+  <div id="chatmate-boot" role="status" aria-label="Loading ChatMate">
+    <img class="cm-boot__logo" src="icons/Icon-192.png" alt="ChatMate logo" width="96" height="96">
+    <p class="cm-boot__eyebrow">CHATMATE · ANONYMOUS ROOM CHAT</p>
+    <h1 class="cm-boot__quote">Every room<br><em>has a secret.</em></h1>
+    <p class="cm-boot__slogan">SAY IT. SIGN NOTHING. <span>WHERE TRUTHS UNRAVEL.</span></p>
+  </div>
+
+  <!-- Install prompt. Opens shortly after load unless dismissed this session. -->
+  <div id="cm-install" class="cm-install" aria-hidden="true">
+    <section class="cm-card" role="dialog" aria-modal="true" aria-labelledby="cm-install-title" aria-describedby="cm-install-body" tabindex="-1">
+      <button id="cm-install-close" class="cm-card__close" type="button" aria-label="Close install prompt">&times;</button>
+
+      <div class="cm-card__top">
+        <img class="cm-card__logo" src="icons/Icon-192.png" alt="" width="64" height="64">
+        <div class="cm-card__brand">
+          <p>CHATMATE</p>
+          <span>EVERY ROOM HAS A SECRET</span>
+        </div>
+      </div>
+
+      <h2 id="cm-install-title">Install<br><em>ChatMate.</em></h2>
+      <p id="cm-install-body" class="cm-lede">
+        One tap. Full-screen. No app store.
+      </p>
+
+      <button id="cm-install-action" class="cm-button" type="button">
+        <span class="cm-button__icon" aria-hidden="true">↓</span>
+        <span class="cm-button__label">Install to device</span>
+      </button>
+
+      <p id="cm-install-status" class="cm-status" role="status" hidden></p>
+
+      <p class="cm-note">FREE · NO ADS · NO NAMES ON MESSAGES. EVER.</p>
+    </section>
+  </div>
+
+  <noscript>
+    <main class="cm-noscript">
+      <img src="icons/Icon-192.png" alt="ChatMate logo" width="88" height="88">
+      <p>CHATMATE · ANONYMOUS ROOM CHAT</p>
+      <h1>Every room has a secret.</h1>
+      <p>ChatMate is anonymous room chat for students, teams, hostels and circles.
+        Create your ID, join the rooms you belong to, and speak without your name
+        attached. The sender of a message is never revealed to anyone.</p>
+      <p><strong>Say it. Sign nothing. Where truths unravel.</strong></p>
+      <p>Please enable JavaScript to open ChatMate.</p>
+    </main>
+  </noscript>
+
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
