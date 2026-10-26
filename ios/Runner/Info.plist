@@ -8,6 +8,14 @@
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
 	<string>ChatMate</string>
+	<key>NSCameraUsageDescription</key>
+	<string>ChatMate uses the camera so you can take a private photo or video to share in a room.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>ChatMate uses the microphone to record sound when you capture a video.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ChatMate needs access to your photos so you can choose an image, GIF or video to send.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>ChatMate saves photos and videos you choose to keep from a room.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

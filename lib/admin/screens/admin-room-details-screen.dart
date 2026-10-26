@@ -268,6 +268,24 @@ class _MessageCard extends StatelessWidget {
     final handle = message['sender_handle'] as String?;
     final revealed = message['reveal_sender'] == true;
     final body = message['body'] as String? ?? '';
+    final kind = message['kind'] as String? ?? 'text';
+    final caption = message['caption'] as String? ?? '';
+    final label = kind == 'image'
+        ? 'PHOTO'
+        : kind == 'gif'
+        ? 'GIF'
+        : kind == 'video'
+        ? 'VIDEO'
+        : kind == 'sticker'
+        ? 'STICKER'
+        : 'TEXT';
+    final content = deleted
+        ? 'Message deleted by its sender or the creator.'
+        : kind == 'text'
+        ? body
+        : caption.isEmpty
+        ? '[$label]'
+        : '[$label] $caption';
     final readCount = (message['read_count'] as num?)?.toInt() ?? 0;
     final created = DateTime.tryParse(message['created_at'] as String? ?? '');
 
@@ -317,7 +335,7 @@ class _MessageCard extends StatelessWidget {
           ),
           const SizedBox(height: 9),
           Text(
-            deleted ? 'Message deleted by its sender or the creator.' : body,
+            content,
             style: AppText.body(13, color: deleted ? muted : ink, h: 1.45)
                 .copyWith(
                   fontStyle: deleted ? FontStyle.italic : FontStyle.normal,

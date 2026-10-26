@@ -359,6 +359,14 @@ class ChatMessage {
   final bool revealSender;
   final String? senderHandle;
   final int? seenCount;
+  final String kind;
+  final String? mediaPath;
+  final String? mime;
+  final int? width;
+  final int? height;
+  final String? caption;
+  final String? stickerId;
+  final int? durationMs;
 
   const ChatMessage({
     required this.id,
@@ -370,21 +378,54 @@ class ChatMessage {
     required this.revealSender,
     required this.senderHandle,
     required this.seenCount,
+    this.kind = 'text',
+    this.mediaPath,
+    this.mime,
+    this.width,
+    this.height,
+    this.caption,
+    this.stickerId,
+    this.durationMs,
   });
 
-  factory ChatMessage.fromMap(Map<String, dynamic> map) => ChatMessage(
-    id: map['id'] as String,
-    roomId: map['room_id'] as String,
-    text: (map['body'] as String?) ?? '',
-    createdAt: _parseDate(map['created_at']) ?? DateTime.now(),
-    isMine: map['is_mine'] == true,
-    isDeleted: map['is_deleted'] == true,
-    revealSender: map['reveal_sender'] == true,
-    senderHandle: map['sender_handle'] == null
-        ? null
-        : (map['sender_handle'] as String).toLowerCase(),
-    seenCount: map['seen_count'] == null ? null : _parseInt(map['seen_count']),
-  );
+  bool get isText => !isDeleted && kind == 'text';
+  bool get isImage => !isDeleted && kind == 'image';
+  bool get isGif => !isDeleted && kind == 'gif';
+  bool get isVideo => !isDeleted && kind == 'video';
+  bool get isSticker => !isDeleted && kind == 'sticker';
+  bool get hasMedia => isImage || isGif || isVideo;
+  bool get hasCaption => !isDeleted && (caption ?? '').trim().isNotEmpty;
+
+  factory ChatMessage.fromMap(Map<String, dynamic> map) {
+    final kind = map['kind'] as String? ?? 'text';
+    return ChatMessage(
+      id: map['id'] as String,
+      roomId: map['room_id'] as String,
+      text: (map['body'] as String?) ?? '',
+      createdAt: _parseDate(map['created_at']) ?? DateTime.now(),
+      isMine: map['is_mine'] == true,
+      isDeleted: map['is_deleted'] == true,
+      revealSender: map['reveal_sender'] == true,
+      senderHandle: map['sender_handle'] == null
+          ? null
+          : (map['sender_handle'] as String).toLowerCase(),
+      seenCount: map['seen_count'] == null
+          ? null
+          : _parseInt(map['seen_count']),
+      kind: const {'text', 'image', 'gif', 'video', 'sticker'}.contains(kind)
+          ? kind
+          : 'text',
+      mediaPath: map['media_path'] as String?,
+      mime: map['mime'] as String?,
+      width: map['width'] == null ? null : _parseInt(map['width']),
+      height: map['height'] == null ? null : _parseInt(map['height']),
+      caption: map['caption'] as String?,
+      stickerId: map['sticker_id'] as String?,
+      durationMs: map['duration_ms'] == null
+          ? null
+          : _parseInt(map['duration_ms']),
+    );
+  }
 }
 
 class SeenReceipt {

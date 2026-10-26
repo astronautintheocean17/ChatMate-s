@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'auth-service.dart';
 import 'models.dart';
+import '../media/media-service.dart';
 
 class ChatService {
   ChatService._();
@@ -44,8 +45,42 @@ class ChatService {
     return result as String;
   }
 
-  static Future<void> delete(String messageId) async {
+  static Future<String> sendMedia({
+    required String roomId,
+    required String kind,
+    required bool revealSender,
+    String? mediaPath,
+    String? mime,
+    int? width,
+    int? height,
+    String? caption,
+    String? stickerId,
+    int? durationMs,
+  }) async {
+    final result = await _client.rpc(
+      'send_message',
+      params: {
+        'p_room_id': roomId,
+        'p_body': null,
+        'p_reveal_sender': revealSender,
+        'p_kind': kind,
+        'p_media_path': mediaPath,
+        'p_mime': mime,
+        'p_width': width,
+        'p_height': height,
+        'p_caption': caption,
+        'p_sticker_id': stickerId,
+        'p_duration_ms': durationMs,
+      },
+    );
+    return result as String;
+  }
+
+  static Future<void> delete(String messageId, {String? mediaPath}) async {
     await _client.rpc('delete_message', params: {'p_message_id': messageId});
+    if (mediaPath != null && mediaPath.isNotEmpty) {
+      await MediaService.remove(mediaPath);
+    }
   }
 
   static Future<void> markRead(String roomId) async {

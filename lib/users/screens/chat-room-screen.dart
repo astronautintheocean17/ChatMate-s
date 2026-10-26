@@ -1,6 +1,7 @@
 // lib/users/screens/chat-room-screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../common/utils/format.dart';
 import '../../data/auth-service.dart';
@@ -8,6 +9,16 @@ import '../../data/chat-service.dart';
 import '../../data/errors.dart';
 import '../../data/models.dart';
 import '../../data/room-service.dart';
+import '../../media/gif-picker-sheet.dart';
+import '../../media/giphy-service.dart';
+import '../../media/media-actions.dart';
+import '../../media/media-attach-sheet.dart';
+import '../../media/media-bubble-content.dart';
+import '../../media/media-catalog.dart';
+import '../../media/media-preview-sheet.dart';
+import '../../media/media-service.dart';
+import '../../media/media-viewer-screen.dart';
+import '../../media/sticker-picker-sheet.dart';
 import '../../theme/app-theme.dart';
 import 'room-info-sheet.dart';
 
@@ -29,6 +40,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final _scroll = ScrollController();
   final _input = TextEditingController();
   final List<ChatMessage> _messages = [];
+  final Map<String, String> _mediaUrls = {};
+  final Map<String, DateTime> _mediaSignedAt = {};
   RoomDetails? _details;
   RealtimeChannel? _channel;
   Timer? _typingTimer;
@@ -41,6 +54,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   bool _hasMore = false;
   bool _reveal = false;
   bool _someoneTyping = false;
+  String? _mediaBusy;
   String? _error;
   String? _fatal;
 
@@ -84,6 +98,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         _hasMore = latest.length >= 60;
       });
       _subscribe();
+      unawaited(_signMedia());
       if (_messages.any((message) => !message.isMine)) {
         _markRead(notify: true);
       } else {
@@ -143,6 +158,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           ..clear()
           ..addAll(merged),
       );
+      unawaited(_signMedia());
       if (scroll || atBottom) _scrollToBottom();
       await _markRead(notify: hasNewIncoming);
     } catch (_) {
@@ -150,6 +166,35 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     } finally {
       _refreshing = false;
     }
+  }
+
+  Future<void> _signMedia({bool force = false}) async {
+    final paths = <String>{
+      for (final message in _messages)
+        if (message.hasMedia && (message.mediaPath ?? '').isNotEmpty)
+          message.mediaPath!,
+    };
+    if (paths.isEmpty) return;
+    final now = DateTime.now();
+    final due = paths
+        .where((path) {
+          final signedAt = _mediaSignedAt[path];
+          return force ||
+              _mediaUrls[path] == null ||
+              signedAt == null ||
+              now.difference(signedAt).inMinutes >= 50;
+        })
+        .toList(growable: false);
+    if (due.isEmpty) return;
+
+    final urls = await MediaService.signedUrls(due);
+    if (!mounted || urls.isEmpty) return;
+    setState(() {
+      for (final entry in urls.entries) {
+        _mediaUrls[entry.key] = entry.value;
+        _mediaSignedAt[entry.key] = now;
+      }
+    });
   }
 
   Future<void> _loadOlder() async {
@@ -170,6 +215,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         _messages.insertAll(0, fresh);
         _hasMore = older.length >= 50;
       });
+      unawaited(_signMedia());
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -231,6 +277,169 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  Future<void> _openAttach() async {
+    if (_mediaBusy != null || _sending) return;
+    final choice = await showMediaAttachSheet(context);
+    if (choice == null || !mounted) return;
+    switch (choice) {
+      case AttachChoice.imageCamera:
+        await _pickImage(ImageSource.camera);
+      case AttachChoice.imageGallery:
+        await _pickImage(ImageSource.gallery);
+      case AttachChoice.gif:
+        await _pickGif();
+      case AttachChoice.sticker:
+        await _pickSticker();
+      case AttachChoice.video:
+        final source = await showVideoSourceSheet(context);
+        if (source == null || !mounted) return;
+        await _pickVideo(
+          source == VideoSource.camera
+              ? ImageSource.camera
+              : ImageSource.gallery,
+        );
+    }
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickImage(source: source);
+      if (file == null || !mounted) return;
+      await _prepareAndPreview(
+        () => MediaService.prepareImage(file),
+        source == ImageSource.camera
+            ? 'PREPARING PHOTO...'
+            : 'PREPARING PHOTO...',
+      );
+    } catch (error) {
+      _showSnack(error);
+    }
+  }
+
+  Future<void> _pickVideo(ImageSource source) async {
+    try {
+      final file = await ImagePicker().pickVideo(
+        source: source,
+        maxDuration: const Duration(seconds: MediaLimits.maxVideoSeconds),
+      );
+      if (file == null || !mounted) return;
+      await _prepareAndPreview(
+        () => MediaService.prepareVideo(file),
+        'COMPRESSING VIDEO...',
+      );
+    } catch (error) {
+      _showSnack(error);
+    }
+  }
+
+  Future<void> _pickGif() async {
+    final choice = await showGifPicker(context);
+    if (choice == null || !mounted) return;
+    if (choice.bundled != null) {
+      await _prepareAndPreview(
+        () => MediaService.prepareBundledGif(choice.bundled!),
+        'PREPARING GIF...',
+      );
+    } else if (choice.online != null) {
+      await _prepareAndPreview(
+        () => GiphyService.download(choice.online!),
+        'DOWNLOADING GIF...',
+      );
+    } else if (choice.file != null) {
+      await _prepareAndPreview(
+        () => MediaService.prepareGif(choice.file!),
+        'CHECKING GIF...',
+      );
+    }
+  }
+
+  Future<void> _prepareAndPreview(
+    Future<PreparedMedia> Function() prepare,
+    String label,
+  ) async {
+    if (_mediaBusy != null) return;
+    setState(() => _mediaBusy = label);
+    try {
+      final media = await prepare();
+      if (!mounted) return;
+      setState(() => _mediaBusy = null);
+      await showMediaPreview(
+        context,
+        media: media,
+        onSend: (caption) => _sendPrepared(media, caption),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _mediaBusy = null);
+      _showSnack(error);
+    }
+  }
+
+  Future<void> _sendPrepared(PreparedMedia media, String? caption) async {
+    String? uploaded;
+    try {
+      uploaded = await MediaService.upload(roomId: widget.roomId, media: media);
+      await ChatService.sendMedia(
+        roomId: widget.roomId,
+        kind: media.kind,
+        revealSender: _reveal,
+        mediaPath: uploaded,
+        mime: media.mime,
+        width: media.width,
+        height: media.height,
+        caption: caption,
+        durationMs: media.durationMs,
+      );
+      await _refreshLatest(scroll: true);
+      await _broadcast('message');
+    } catch (error) {
+      if (uploaded != null) await MediaService.remove(uploaded);
+      rethrow;
+    }
+  }
+
+  Future<void> _pickSticker() async {
+    final item = await showStickerPicker(context);
+    if (item == null || !mounted || _mediaBusy != null) return;
+    setState(() => _mediaBusy = 'SENDING STICKER...');
+    try {
+      await ChatService.sendMedia(
+        roomId: widget.roomId,
+        kind: MediaKind.sticker,
+        revealSender: _reveal,
+        stickerId: item.id,
+      );
+      await _refreshLatest(scroll: true);
+      await _broadcast('message');
+    } catch (error) {
+      if (mounted) _showSnack(error);
+    } finally {
+      if (mounted) setState(() => _mediaBusy = null);
+    }
+  }
+
+  void _openViewer(ChatMessage message) {
+    final path = message.mediaPath;
+    final url = path == null ? null : _mediaUrls[path];
+    if (url == null) {
+      unawaited(_signMedia(force: true));
+      _showSnack('That media is still loading. Try again in a moment.');
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => MediaViewerScreen(message: message, url: url),
+      ),
+    );
+  }
+
+  void _showSnack(Object error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(friendlyError(error))));
+  }
+
   void _scrollToBottom({bool jump = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scroll.hasClients) return;
@@ -273,6 +482,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Future<void> _showActions(ChatMessage message) async {
     final isCreator = _details?.isCreator ?? false;
     final canDelete = message.isMine || isCreator;
+    final mediaPath = message.mediaPath;
+    final mediaUrl = mediaPath == null ? null : _mediaUrls[mediaPath];
 
     await showModalBottomSheet<void>(
       context: context,
@@ -299,6 +510,46 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 ],
               ),
             ),
+            if (message.hasMedia)
+              ListTile(
+                leading: const Icon(Icons.open_in_full_rounded, size: 20),
+                title: Text(
+                  'Open ${mediaKindLabel(message).toLowerCase()}',
+                  style: AppText.body(13.5, color: AppTheme.ink(sheetContext)),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _openViewer(message);
+                },
+              ),
+            if (message.hasMedia && mediaUrl != null) ...[
+              ListTile(
+                leading: const Icon(Icons.download_rounded, size: 20),
+                title: Text(
+                  'Save to device',
+                  style: AppText.body(13.5, color: AppTheme.ink(sheetContext)),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  MediaActions.save(context, url: mediaUrl, mime: message.mime);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.ios_share_rounded, size: 20),
+                title: Text(
+                  'Share',
+                  style: AppText.body(13.5, color: AppTheme.ink(sheetContext)),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  MediaActions.share(
+                    context,
+                    url: mediaUrl,
+                    mime: message.mime,
+                  );
+                },
+              ),
+            ],
             if (!message.isMine)
               ListTile(
                 leading: Icon(
@@ -419,7 +670,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
     if (confirmed != true) return;
     try {
-      await ChatService.delete(message.id);
+      await ChatService.delete(message.id, mediaPath: message.mediaPath);
       await _refreshLatest();
       await _broadcast('message');
     } catch (error) {
@@ -499,6 +750,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     return Column(
       children: [
         if (_error != null) _ErrorBanner(message: _error!),
+        if (_mediaBusy != null) _MediaBusyBanner(label: _mediaBusy!),
         Expanded(
           child: _messages.isEmpty
               ? _EmptyConversation(name: details?.name)
@@ -520,6 +772,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       final message = _messages[_messages.length - 1 - index];
                       return _MessageBubble(
                         message: message,
+                        mediaUrl: message.mediaPath == null
+                            ? null
+                            : _mediaUrls[message.mediaPath!],
+                        onOpen: () => _openViewer(message),
                         onLongPress: () => _showActions(message),
                         onMore: () => _showActions(message),
                       );
@@ -531,9 +787,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           controller: _input,
           reveal: _reveal,
           sending: _sending,
+          busy: _mediaBusy != null,
           someoneTyping: _someoneTyping,
           onRevealChanged: (value) => setState(() => _reveal = value),
           onChanged: _onInput,
+          onAttach: _openAttach,
           onSend: _send,
         ),
       ],
@@ -544,16 +802,27 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
+    required this.mediaUrl,
+    required this.onOpen,
     required this.onLongPress,
     required this.onMore,
   });
 
   final ChatMessage message;
+  final String? mediaUrl;
+  final VoidCallback onOpen;
   final VoidCallback onLongPress;
   final VoidCallback onMore;
 
   @override
   Widget build(BuildContext context) {
+    if (message.isSticker) {
+      return _StickerBubble(
+        message: message,
+        onLongPress: onLongPress,
+        onMore: onMore,
+      );
+    }
     final mine = message.isMine;
     final accent = AppTheme.accent(context);
     final foreground = mine ? Colors.white : AppTheme.ink(context);
@@ -571,7 +840,12 @@ class _MessageBubble extends StatelessWidget {
           constraints: BoxConstraints(
             maxWidth: MediaQuery.sizeOf(context).width * 0.78,
           ),
-          padding: const EdgeInsets.fromLTRB(13, 10, 9, 10),
+          padding: EdgeInsets.fromLTRB(
+            message.hasMedia ? 6 : 13,
+            message.hasMedia ? 6 : 10,
+            9,
+            10,
+          ),
           decoration: BoxDecoration(
             color: mine ? accent : AppTheme.surface(context),
             border: Border.all(color: mine ? accent : AppTheme.line(context)),
@@ -636,15 +910,30 @@ class _MessageBubble extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 5),
-              Text(
-                text,
-                style: message.isDeleted
-                    ? AppText.body(
-                        13.5,
-                        color: labelColor,
-                      ).copyWith(fontStyle: FontStyle.italic)
-                    : AppText.body(14, color: foreground, h: 1.42),
-              ),
+              if (message.hasMedia) ...[
+                MediaBubbleContent(
+                  message: message,
+                  url: mediaUrl,
+                  onOpen: onOpen,
+                ),
+                if (message.hasCaption)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(6, 7, 4, 1),
+                    child: Text(
+                      message.caption!,
+                      style: AppText.body(13.5, color: foreground, h: 1.4),
+                    ),
+                  ),
+              ] else
+                Text(
+                  text,
+                  style: message.isDeleted
+                      ? AppText.body(
+                          13.5,
+                          color: labelColor,
+                        ).copyWith(fontStyle: FontStyle.italic)
+                      : AppText.body(14, color: foreground, h: 1.42),
+                ),
               if (mine && !message.isDeleted && (message.seenCount ?? 0) > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 5),
@@ -668,23 +957,126 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+class _StickerBubble extends StatelessWidget {
+  const _StickerBubble({
+    required this.message,
+    required this.onLongPress,
+    required this.onMore,
+  });
+
+  final ChatMessage message;
+  final VoidCallback onLongPress;
+  final VoidCallback onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    final sticker = stickerById(message.stickerId);
+    final mine = message.isMine;
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: GestureDetector(
+        onLongPress: onLongPress,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          width: 148,
+          child: Column(
+            crossAxisAlignment: mine
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
+            children: [
+              if (sticker == null)
+                Container(
+                  width: 128,
+                  height: 128,
+                  alignment: Alignment.center,
+                  color: AppTheme.muted(context).withValues(alpha: 0.1),
+                  child: Text(
+                    'Sticker unavailable',
+                    style: AppText.mono(
+                      8,
+                      color: AppTheme.muted(context),
+                      ls: 0.6,
+                    ),
+                  ),
+                )
+              else
+                Image.asset(
+                  sticker.assetPath,
+                  width: 132,
+                  height: 132,
+                  fit: BoxFit.contain,
+                ),
+              SizedBox(
+                height: 17,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      mine
+                          ? 'YOU'
+                          : message.senderHandle == null
+                          ? 'ANONYMOUS'
+                          : '@${message.senderHandle}',
+                      style: AppText.mono(
+                        7.5,
+                        color: AppTheme.muted(context),
+                        ls: 0.8,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      clockTime(message.createdAt),
+                      style: AppText.mono(
+                        7.5,
+                        color: AppTheme.muted(context),
+                        ls: 0.3,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    InkWell(
+                      onTap: onMore,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.more_horiz_rounded,
+                          size: 13,
+                          color: AppTheme.muted(context),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
     required this.reveal,
     required this.sending,
+    required this.busy,
     required this.someoneTyping,
     required this.onRevealChanged,
     required this.onChanged,
+    required this.onAttach,
     required this.onSend,
   });
 
   final TextEditingController controller;
   final bool reveal;
   final bool sending;
+  final bool busy;
   final bool someoneTyping;
   final ValueChanged<bool> onRevealChanged;
   final ValueChanged<String> onChanged;
+  final VoidCallback onAttach;
   final VoidCallback onSend;
 
   @override
@@ -755,6 +1147,28 @@ class _Composer extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: IconButton(
+                  tooltip: 'Add photo, GIF, sticker or video',
+                  onPressed: busy || sending ? null : onAttach,
+                  icon: Icon(
+                    Icons.add_rounded,
+                    size: 22,
+                    color: busy || sending
+                        ? AppTheme.muted(context).withValues(alpha: 0.5)
+                        : accent,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: accent.withValues(alpha: 0.08),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(color: AppTheme.line(context)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
@@ -893,6 +1307,33 @@ class _EmptyConversation extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MediaBusyBanner extends StatelessWidget {
+  const _MediaBusyBanner({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppTheme.accent(context);
+    return Container(
+      width: double.infinity,
+      color: accent.withValues(alpha: 0.07),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(strokeWidth: 1.5, color: accent),
+          ),
+          const SizedBox(width: 9),
+          Text(label, style: AppText.mono(8.5, color: accent, ls: 0.9)),
+        ],
       ),
     );
   }
