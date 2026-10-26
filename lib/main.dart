@@ -1,9 +1,11 @@
 // lib/main.dart
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase-config.dart';
 import 'common/screens/session-gate.dart';
 import 'common/screens/setup-required-screen.dart';
+import 'data/push-service.dart';
 import 'theme/app-theme.dart';
 import 'theme/theme-controller.dart';
 
@@ -25,6 +27,15 @@ Future<void> main() async {
     runApp(_ConfigApp(error: error.toString()));
     return;
   }
+
+  // Push is a bonus layer: Firebase may be absent on web/iOS without keys and
+  // the app must still open.
+  try {
+    FirebaseMessaging.onBackgroundMessage(chatmateBackgroundHandler);
+  } catch (_) {
+    // Ignore: no Firebase on this platform.
+  }
+  await PushService.boot();
 
   runApp(const MyApp());
 }
@@ -56,6 +67,7 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'ChatMate',
           debugShowCheckedModeBanner: false,
+          navigatorKey: appNavigatorKey,
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: themeController.mode,

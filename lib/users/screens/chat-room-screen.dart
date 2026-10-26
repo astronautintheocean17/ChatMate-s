@@ -1,14 +1,18 @@
 // lib/users/screens/chat-room-screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../common/utils/format.dart';
+import '../../common/widgets/link-text.dart';
+import '../../common/widgets/mate-avatar.dart';
 import '../../data/auth-service.dart';
 import '../../data/chat-service.dart';
 import '../../data/errors.dart';
 import '../../data/models.dart';
 import '../../data/room-service.dart';
+import '../../data/social-service.dart';
 import '../../media/gif-picker-sheet.dart';
 import '../../media/giphy-service.dart';
 import '../../media/media-actions.dart';
@@ -54,6 +58,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   bool _hasMore = false;
   bool _reveal = false;
   bool _someoneTyping = false;
+  ChatMessage? _replyingTo;
   String? _mediaBusy;
   String? _error;
   String? _fatal;
@@ -122,7 +127,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           callback: (_) => _refreshLatest(scroll: true),
         )
         .onBroadcast(event: 'typing', callback: (_) => _showTyping())
-        .onBroadcast(event: 'seen', callback: (_) => _refreshLatest());
+        .onBroadcast(event: 'seen', callback: (_) => _refreshLatest())
+        .onBroadcast(event: 'reaction', callback: (_) => _refreshLatest());
     channel.subscribe();
     _channel = channel;
   }
@@ -264,8 +270,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         roomId: widget.roomId,
         body: body,
         revealSender: _reveal,
+        replyTo: _replyingTo?.id,
       );
       _input.clear();
+      if (mounted) setState(() => _replyingTo = null);
       _lastTypingSent = null;
       await _refreshLatest(scroll: true);
       await _broadcast('message');
@@ -277,9 +285,67 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  Future<void> _react(ChatMessage message, String emoji) async {
+    // Optimistic: flip the reaction locally so the tap feels instant.
+    final existing = message.reactions.firstWhere(
+      (reaction) => reaction.mine,
+      orElse: () => const MessageReaction(emoji: '', count: 0, mine: false),
+    );
+    final removing = existing.emoji == emoji;
+    final updated = <MessageReaction>[];
+    for (final reaction in message.reactions) {
+      if (reaction.emoji == emoji) {
+        final count =
+            reaction.count + (removing ? -1 : (reaction.mine ? 0 : 1));
+        if (count > 0) {
+          updated.add(
+            MessageReaction(emoji: emoji, count: count, mine: !removing),
+          );
+        }
+      } else if (reaction.mine && !removing) {
+        final count = reaction.count - 1;
+        if (count > 0) {
+          updated.add(
+            MessageReaction(emoji: reaction.emoji, count: count, mine: false),
+          );
+        }
+      } else {
+        updated.add(reaction);
+      }
+    }
+    if (removing && !updated.any((r) => r.emoji == emoji)) {
+      // Already handled above.
+    } else if (!removing && !updated.any((r) => r.emoji == emoji)) {
+      updated.add(MessageReaction(emoji: emoji, count: 1, mine: true));
+    }
+
+    setState(() {
+      final index = _messages.indexWhere((m) => m.id == message.id);
+      if (index != -1) {
+        _messages[index] = message.copyWith(
+          reactions: List.unmodifiable(updated),
+        );
+      }
+    });
+
+    try {
+      await SocialService.react(message.id, emoji);
+      await _broadcast('reaction');
+    } catch (error) {
+      if (mounted) {
+        await _refreshLatest();
+        _showSnack(error);
+      }
+    }
+  }
+
+  void _startReply(ChatMessage message) {
+    setState(() => _replyingTo = message);
+  }
+
   Future<void> _openAttach() async {
     if (_mediaBusy != null || _sending) return;
-    final choice = await showMediaAttachSheet(context);
+    final choice = await showMediaAttachSheet(context, includeSticker: false);
     if (choice == null || !mounted) return;
     switch (choice) {
       case AttachChoice.imageCamera:
@@ -389,7 +455,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         height: media.height,
         caption: caption,
         durationMs: media.durationMs,
+        replyTo: _replyingTo?.id,
       );
+      if (mounted) setState(() => _replyingTo = null);
       await _refreshLatest(scroll: true);
       await _broadcast('message');
     } catch (error) {
@@ -408,7 +476,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         kind: MediaKind.sticker,
         revealSender: _reveal,
         stickerId: item.id,
+        replyTo: _replyingTo?.id,
       );
+      if (mounted) setState(() => _replyingTo = null);
       await _refreshLatest(scroll: true);
       await _broadcast('message');
     } catch (error) {
@@ -500,7 +570,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               child: Row(
                 children: [
                   Text(
-                    message.isMine ? 'YOUR MESSAGE' : 'SENDER',
+                    message.isMine
+                        ? 'YOUR MESSAGE'
+                        : message.senderHandle == null
+                        ? 'SENDER'
+                        : '@${message.senderHandle}',
                     style: AppText.mono(
                       9.5,
                       color: AppTheme.muted(sheetContext),
@@ -510,6 +584,77 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 ],
               ),
             ),
+            if (!message.isDeleted)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    for (final emoji in const [
+                      '👍',
+                      '❤️',
+                      '😂',
+                      '😮',
+                      '😢',
+                      '🙏',
+                      '🔥',
+                      '👏',
+                    ])
+                      InkWell(
+                        borderRadius: BorderRadius.circular(100),
+                        onTap: () {
+                          Navigator.pop(sheetContext);
+                          _react(message, emoji);
+                        },
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color:
+                                message.reactions.any(
+                                  (reaction) =>
+                                      reaction.emoji == emoji && reaction.mine,
+                                )
+                                ? AppTheme.accent(
+                                    sheetContext,
+                                  ).withValues(alpha: 0.14)
+                                : Colors.transparent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            emoji,
+                            style: const TextStyle(fontSize: 19),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            if (!message.isDeleted)
+              ListTile(
+                leading: const Icon(Icons.reply_rounded, size: 20),
+                title: Text(
+                  'Reply',
+                  style: AppText.body(13.5, color: AppTheme.ink(sheetContext)),
+                ),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _startReply(message);
+                },
+              ),
+            if (!message.isDeleted && message.text.trim().isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.copy_rounded, size: 20),
+                title: Text(
+                  'Copy text',
+                  style: AppText.body(13.5, color: AppTheme.ink(sheetContext)),
+                ),
+                onTap: () {
+                  Clipboard.setData(ClipboardData(text: message.text));
+                  Navigator.pop(sheetContext);
+                },
+              ),
             if (message.hasMedia)
               ListTile(
                 leading: const Icon(Icons.open_in_full_rounded, size: 20),
@@ -692,36 +837,58 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           onPressed: () => Navigator.maybePop(context),
         ),
         titleSpacing: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(
-              details?.name ?? widget.roomName,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.serif(20, color: AppTheme.ink(context), ls: -0.3),
+            MateAvatar(
+              handle: details?.isDirect == true
+                  ? (details?.otherHandle ?? widget.roomName)
+                  : (details?.name ?? widget.roomName),
+              size: 34,
             ),
-            if (details != null)
-              Text(
-                '${details.memberCount} '
-                '${details.memberCount == 1 ? 'member' : 'members'}'
-                ' · ${details.accessMode == 'request'
-                    ? 'REQUEST ONLY'
-                    : details.accessMode == 'link'
-                    ? 'OPEN LINK'
-                    : 'OPEN TO ALL'}',
-                style: AppText.mono(
-                  8.5,
-                  color: AppTheme.muted(context),
-                  ls: 1.1,
-                ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    details?.isDirect == true
+                        ? '@${details?.otherHandle ?? 'chat'}'
+                        : details?.name ?? widget.roomName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.serif(
+                      19,
+                      color: AppTheme.ink(context),
+                      ls: -0.3,
+                    ),
+                  ),
+                  if (details != null)
+                    Text(
+                      _headerSubtitle(details),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppText.mono(
+                        8.5,
+                        color: details.revealsEveryone
+                            ? AppTheme.accent(context)
+                            : AppTheme.muted(context),
+                        ls: 1.1,
+                      ),
+                    ),
+                ],
               ),
+            ),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Room info',
-            icon: const Icon(Icons.group_outlined, size: 20),
+            tooltip: details?.isDirect == true ? 'Chat info' : 'Room info',
+            icon: Icon(
+              details?.isDirect == true
+                  ? Icons.info_outline_rounded
+                  : Icons.group_outlined,
+              size: 20,
+            ),
             onPressed: _openInfo,
           ),
           const SizedBox(width: 4),
@@ -729,6 +896,21 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       ),
       body: _buildBody(details),
     );
+  }
+
+  String _headerSubtitle(RoomDetails details) {
+    if (details.isDirect) {
+      return details.revealsEveryone
+          ? 'PRIVATE CHAT · NAMES VISIBLE'
+          : 'PRIVATE CHAT · ANONYMOUS BY DEFAULT';
+    }
+    final identity = details.revealsEveryone
+        ? 'NAMES VISIBLE'
+        : details.forcesAnonymous
+        ? 'ANONYMOUS ONLY'
+        : 'REVEAL PER MESSAGE';
+    return '${details.memberCount} '
+        '${details.memberCount == 1 ? 'MEMBER' : 'MEMBERS'} · $identity';
   }
 
   Widget _buildBody(RoomDetails? details) {
@@ -752,36 +934,46 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         if (_error != null) _ErrorBanner(message: _error!),
         if (_mediaBusy != null) _MediaBusyBanner(label: _mediaBusy!),
         Expanded(
-          child: _messages.isEmpty
-              ? _EmptyConversation(name: details?.name)
-              : RefreshIndicator(
-                  color: AppTheme.accent(context),
-                  onRefresh: () => _refreshLatest(),
-                  child: ListView.builder(
-                    controller: _scroll,
-                    reverse: true,
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                    itemCount: _messages.length + (_hasMore ? 1 : 0),
-                    itemBuilder: (context, index) {
-                      if (index >= _messages.length) {
-                        return _OlderButton(
-                          busy: _loadingOlder,
-                          onTap: _loadOlder,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppTheme.bg(context),
+              border: Border(
+                top: BorderSide(color: AppTheme.line(context)),
+                bottom: BorderSide(color: AppTheme.line(context)),
+              ),
+            ),
+            child: _messages.isEmpty
+                ? _EmptyConversation(name: details?.name)
+                : RefreshIndicator(
+                    color: AppTheme.accent(context),
+                    onRefresh: () => _refreshLatest(),
+                    child: ListView.builder(
+                      controller: _scroll,
+                      reverse: true,
+                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                      itemCount: _messages.length + (_hasMore ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index >= _messages.length) {
+                          return _OlderButton(
+                            busy: _loadingOlder,
+                            onTap: _loadOlder,
+                          );
+                        }
+                        final message = _messages[_messages.length - 1 - index];
+                        return _MessageBubble(
+                          message: message,
+                          mediaUrl: message.mediaPath == null
+                              ? null
+                              : _mediaUrls[message.mediaPath!],
+                          onOpen: () => _openViewer(message),
+                          onLongPress: () => _showActions(message),
+                          onMore: () => _showActions(message),
+                          onReact: (emoji) => _react(message, emoji),
                         );
-                      }
-                      final message = _messages[_messages.length - 1 - index];
-                      return _MessageBubble(
-                        message: message,
-                        mediaUrl: message.mediaPath == null
-                            ? null
-                            : _mediaUrls[message.mediaPath!],
-                        onOpen: () => _openViewer(message),
-                        onLongPress: () => _showActions(message),
-                        onMore: () => _showActions(message),
-                      );
-                    },
+                      },
+                    ),
                   ),
-                ),
+          ),
         ),
         _Composer(
           controller: _input,
@@ -789,13 +981,82 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           sending: _sending,
           busy: _mediaBusy != null,
           someoneTyping: _someoneTyping,
+          details: details,
+          replyingTo: _replyingTo,
           onRevealChanged: (value) => setState(() => _reveal = value),
           onChanged: _onInput,
+          onCancelReply: () => setState(() => _replyingTo = null),
           onAttach: _openAttach,
+          onSticker: _pickSticker,
+          onEmoji: _pickEmoji,
           onSend: _send,
         ),
       ],
     );
+  }
+
+  Future<void> _pickEmoji() async {
+    final emoji = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: AppTheme.surface(context),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final item in const [
+                '😀',
+                '😂',
+                '🥹',
+                '😍',
+                '😎',
+                '🤔',
+                '😴',
+                '🥳',
+                '😭',
+                '😤',
+                '🙃',
+                '😅',
+                '🤝',
+                '🙏',
+                '👀',
+                '💀',
+                '🔥',
+                '❤️',
+                '✨',
+                '🎉',
+                '👍',
+                '👏',
+                '💬',
+                '🌙',
+              ])
+                InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () => Navigator.pop(sheetContext, item),
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    alignment: Alignment.center,
+                    child: Text(item, style: const TextStyle(fontSize: 24)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (emoji == null || !mounted) return;
+    final text = _input.text;
+    final selection = _input.selection;
+    final at = selection.isValid ? selection.start : text.length;
+    _input.text = text.substring(0, at) + emoji + text.substring(at);
+    _input.selection = TextSelection.collapsed(offset: at + emoji.length);
   }
 }
 
@@ -806,6 +1067,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onOpen,
     required this.onLongPress,
     required this.onMore,
+    required this.onReact,
   });
 
   final ChatMessage message;
@@ -813,6 +1075,7 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback onOpen;
   final VoidCallback onLongPress;
   final VoidCallback onMore;
+  final ValueChanged<String> onReact;
 
   @override
   Widget build(BuildContext context) {
@@ -835,6 +1098,7 @@ class _MessageBubble extends StatelessWidget {
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: onLongPress,
+        onDoubleTap: message.isDeleted ? null : () => onReact('❤️'),
         child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           constraints: BoxConstraints(
@@ -878,7 +1142,9 @@ class _MessageBubble extends StatelessWidget {
                       message.isDeleted
                           ? dayLabel(message.createdAt)
                           : mine
-                          ? 'YOU'
+                          ? (message.senderHandle == null
+                                ? 'YOU'
+                                : 'YOU · @${message.senderHandle}')
                           : message.senderHandle == null
                           ? 'ANONYMOUS'
                           : '@${message.senderHandle}',
@@ -910,6 +1176,60 @@ class _MessageBubble extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 5),
+              if (message.hasReply)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                    decoration: BoxDecoration(
+                      color: mine
+                          ? Colors.black.withValues(alpha: 0.18)
+                          : AppTheme.bg(context),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border(
+                        left: BorderSide(
+                          color: mine
+                              ? Colors.white.withValues(alpha: 0.55)
+                              : accent,
+                          width: 2.5,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          message.replyHandle == null
+                              ? 'ANONYMOUS'
+                              : '@${message.replyHandle}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.mono(
+                            8,
+                            color: mine
+                                ? Colors.white.withValues(alpha: 0.8)
+                                : accent,
+                            ls: 0.9,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          message.replyPreview ?? 'Message',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.body(
+                            11.5,
+                            color: mine
+                                ? Colors.white.withValues(alpha: 0.85)
+                                : AppTheme.muted(context),
+                            h: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (message.hasMedia) ...[
                 MediaBubbleContent(
                   message: message,
@@ -919,20 +1239,25 @@ class _MessageBubble extends StatelessWidget {
                 if (message.hasCaption)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(6, 7, 4, 1),
-                    child: Text(
+                    child: LinkText(
                       message.caption!,
                       style: AppText.body(13.5, color: foreground, h: 1.4),
+                      linkColor: mine ? Colors.white : accent,
                     ),
                   ),
-              ] else
+              ] else if (message.isDeleted)
                 Text(
                   text,
-                  style: message.isDeleted
-                      ? AppText.body(
-                          13.5,
-                          color: labelColor,
-                        ).copyWith(fontStyle: FontStyle.italic)
-                      : AppText.body(14, color: foreground, h: 1.42),
+                  style: AppText.body(
+                    13.5,
+                    color: labelColor,
+                  ).copyWith(fontStyle: FontStyle.italic),
+                )
+              else
+                LinkText(
+                  text,
+                  style: AppText.body(14, color: foreground, h: 1.45),
+                  linkColor: mine ? Colors.white : accent,
                 ),
               if (mine && !message.isDeleted && (message.seenCount ?? 0) > 0)
                 Padding(
@@ -946,6 +1271,58 @@ class _MessageBubble extends StatelessWidget {
                         '${message.seenCount} SEEN',
                         style: AppText.mono(8, color: labelColor, ls: 0.8),
                       ),
+                    ],
+                  ),
+                ),
+              if (message.hasReactions)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      for (final reaction in message.reactions)
+                        InkWell(
+                          onTap: () => onReact(reaction.emoji),
+                          borderRadius: BorderRadius.circular(100),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: mine
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : AppTheme.bg(context),
+                              borderRadius: BorderRadius.circular(100),
+                              border: Border.all(
+                                color: mine
+                                    ? Colors.white.withValues(alpha: 0.35)
+                                    : AppTheme.line(context),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  reaction.emoji,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                if (reaction.count > 1) ...[
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${reaction.count}',
+                                    style: AppText.body(
+                                      10,
+                                      color: foreground,
+                                      w: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -1013,7 +1390,9 @@ class _StickerBubble extends StatelessWidget {
                   children: [
                     Text(
                       mine
-                          ? 'YOU'
+                          ? (message.senderHandle == null
+                                ? 'YOU'
+                                : 'YOU · @${message.senderHandle}')
                           : message.senderHandle == null
                           ? 'ANONYMOUS'
                           : '@${message.senderHandle}',
@@ -1063,9 +1442,14 @@ class _Composer extends StatelessWidget {
     required this.sending,
     required this.busy,
     required this.someoneTyping,
+    required this.details,
+    required this.replyingTo,
     required this.onRevealChanged,
     required this.onChanged,
+    required this.onCancelReply,
     required this.onAttach,
+    required this.onSticker,
+    required this.onEmoji,
     required this.onSend,
   });
 
@@ -1074,24 +1458,34 @@ class _Composer extends StatelessWidget {
   final bool sending;
   final bool busy;
   final bool someoneTyping;
+  final RoomDetails? details;
+  final ChatMessage? replyingTo;
   final ValueChanged<bool> onRevealChanged;
   final ValueChanged<String> onChanged;
+  final VoidCallback onCancelReply;
   final VoidCallback onAttach;
+  final VoidCallback onSticker;
+  final VoidCallback onEmoji;
   final VoidCallback onSend;
 
   @override
   Widget build(BuildContext context) {
     final accent = AppTheme.accent(context);
+    final canChoose = details?.hasPerMessageReveal ?? true;
+    final effectiveReveal = canChoose
+        ? reveal
+        : (details?.revealsEveryone ?? false);
+
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface(context),
         border: Border(top: BorderSide(color: AppTheme.line(context))),
       ),
       padding: EdgeInsets.fromLTRB(
-        14,
-        7,
-        14,
-        10 + MediaQuery.paddingOf(context).bottom,
+        10,
+        6,
+        10,
+        8 + MediaQuery.paddingOf(context).bottom,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1106,82 +1500,151 @@ class _Composer extends StatelessWidget {
                     'Someone is typing something...',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppText.mono(8.5, color: accent, ls: 0.6),
-                  ),
-                ),
-              ),
-              InkWell(
-                onTap: () => onRevealChanged(!reveal),
-                borderRadius: BorderRadius.circular(20),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 4,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        reveal
-                            ? Icons.visibility_rounded
-                            : Icons.visibility_off_outlined,
-                        size: 12,
-                        color: reveal ? accent : AppTheme.muted(context),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        reveal ? 'HANDLE VISIBLE' : 'STAY ANONYMOUS',
-                        style: AppText.mono(
-                          8,
-                          color: reveal ? accent : AppTheme.muted(context),
-                          ls: 0.9,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 5),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 3),
-                child: IconButton(
-                  tooltip: 'Add photo, GIF, sticker or video',
-                  onPressed: busy || sending ? null : onAttach,
-                  icon: Icon(
-                    Icons.add_rounded,
-                    size: 22,
-                    color: busy || sending
-                        ? AppTheme.muted(context).withValues(alpha: 0.5)
-                        : accent,
-                  ),
-                  style: IconButton.styleFrom(
-                    backgroundColor: accent.withValues(alpha: 0.08),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      side: BorderSide(color: AppTheme.line(context)),
+                    style: AppText.body(
+                      10.5,
+                      color: accent,
+                      w: FontWeight.w500,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
+              if (canChoose)
+                InkWell(
+                  onTap: () => onRevealChanged(!reveal),
+                  borderRadius: BorderRadius.circular(100),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: reveal
+                          ? accent.withValues(alpha: 0.12)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(100),
+                      border: Border.all(
+                        color: reveal
+                            ? accent.withValues(alpha: 0.45)
+                            : AppTheme.line(context),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          reveal
+                              ? Icons.visibility_rounded
+                              : Icons.visibility_off_outlined,
+                          size: 11,
+                          color: reveal ? accent : AppTheme.muted(context),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          reveal ? 'HANDLE VISIBLE' : 'ANONYMOUS',
+                          style: AppText.mono(
+                            8,
+                            color: reveal ? accent : AppTheme.muted(context),
+                            ls: 0.8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      details?.revealsEveryone == true
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_outlined,
+                      size: 11,
+                      color: AppTheme.muted(context),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      details?.revealsEveryone == true
+                          ? 'NAMES VISIBLE'
+                          : 'ANONYMOUS ONLY',
+                      style: AppText.mono(
+                        8,
+                        color: AppTheme.muted(context),
+                        ls: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          if (replyingTo != null)
+            Container(
+              margin: const EdgeInsets.only(top: 4, bottom: 6),
+              padding: const EdgeInsets.fromLTRB(9, 6, 4, 6),
+              decoration: BoxDecoration(
+                color: AppTheme.bg(context),
+                borderRadius: BorderRadius.circular(8),
+                border: Border(left: BorderSide(color: accent, width: 2.5)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          replyingTo!.isMine
+                              ? 'REPLYING TO YOURSELF'
+                              : replyingTo!.senderHandle == null
+                              ? 'REPLYING TO ANONYMOUS'
+                              : 'REPLYING TO @${replyingTo!.senderHandle}',
+                          style: AppText.mono(8, color: accent, ls: 0.8),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          _replyPreview(replyingTo!),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppText.body(
+                            11.5,
+                            color: AppTheme.muted(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close_rounded, size: 16),
+                    onPressed: onCancelReply,
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _roundButton(
+                context,
+                icon: Icons.add_rounded,
+                tooltip: 'Photo, GIF or video',
+                onTap: busy || sending ? null : onAttach,
+              ),
+              const SizedBox(width: 4),
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
                     color: AppTheme.bg(context),
                     border: Border.all(color: AppTheme.line(context)),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(22),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: TextField(
                     controller: controller,
                     onChanged: onChanged,
                     minLines: 1,
-                    maxLines: 4,
+                    maxLines: 5,
                     textCapitalization: TextCapitalization.sentences,
                     keyboardType: TextInputType.multiline,
                     style: AppText.body(14, color: AppTheme.ink(context)),
@@ -1189,7 +1652,7 @@ class _Composer extends StatelessWidget {
                       isDense: true,
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                      hintText: reveal
+                      hintText: effectiveReveal
                           ? 'Message with your handle...'
                           : 'Message anonymously...',
                       hintStyle: AppText.body(
@@ -1200,7 +1663,19 @@ class _Composer extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              _roundButton(
+                context,
+                icon: Icons.emoji_emotions_outlined,
+                tooltip: 'Emoji',
+                onTap: sending ? null : onEmoji,
+              ),
+              _roundButton(
+                context,
+                icon: Icons.sticky_note_2_outlined,
+                tooltip: 'Sticker',
+                onTap: busy || sending ? null : onSticker,
+              ),
+              const SizedBox(width: 4),
               ValueListenableBuilder<TextEditingValue>(
                 valueListenable: controller,
                 builder: (context, value, _) {
@@ -1239,6 +1714,38 @@ class _Composer extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  String _replyPreview(ChatMessage message) {
+    if (message.isDeleted) return 'Deleted message';
+    if (message.isSticker) return 'Sticker';
+    if (message.hasMedia) {
+      if (message.hasCaption) return message.caption!.trim();
+      if (message.isImage) return 'Photo';
+      if (message.isGif) return 'GIF';
+      if (message.isVideo) return 'Video';
+    }
+    return message.text.trim().isEmpty ? 'Message' : message.text.trim();
+  }
+
+  Widget _roundButton(
+    BuildContext context, {
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback? onTap,
+  }) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      visualDensity: VisualDensity.compact,
+      icon: Icon(
+        icon,
+        size: 21,
+        color: onTap == null
+            ? AppTheme.muted(context).withValues(alpha: 0.45)
+            : AppTheme.accent(context),
       ),
     );
   }

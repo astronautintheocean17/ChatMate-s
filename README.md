@@ -92,8 +92,20 @@ flutter build web
 ```
 
 The app targets Flutter with Supabase Auth/Postgres/Realtime. See
-`supabase/0001_init.sql`, `supabase/0002_invite_links.sql`,
-`supabase/0003_three_join_modes.sql` and `supabase/SETUP.md` for the backend
-contract. Existing Supabase projects must run `0002` and then `0003`; projects
-that already ran `0002` only need `0003`.
+`supabase/0001_init.sql` … `supabase/0005_v2_social.sql` and
+`supabase/SETUP.md` for the backend contract. Existing Supabase projects run the
+numbered files in order; every one of them is safe to re-run.
+
+## v2 in one screen
+
+- **Profile / Home / Search** bottom tabs. Home is a WhatsApp-style list of every
+  conversation; Groups is a separate screen of joined rooms only.
+- **Private 1:1 chats** start with a request. Accepting creates one shared
+  `direct` room for the pair, so neither side can open a second one.
+- **In-chat**: replies with a quoted preview, emoji reactions (long-press or
+  double-tap ❤️), clickable `http`/`https`/`www` links in text and captions.
+- **Room identity** is a creator switch: *anonymous* (no names, ever), *reveal*
+  (every message signed, retroactively) or the v1 *per-message* toggle.
+- **Push** via FCM HTTP v1, with a queued, cron-flushed delivery path.
+
 

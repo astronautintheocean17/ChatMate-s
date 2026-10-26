@@ -148,7 +148,7 @@ create policy "chat media owner or creator can delete"
   using (
     bucket_id = 'chat-media'
     and (
-      owner_id = auth.uid()
+      owner_id = auth.uid()::text
       or public.is_room_creator(public.chat_media_room_id(name))
       or public.is_admin()
     )

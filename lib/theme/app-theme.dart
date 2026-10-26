@@ -44,7 +44,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         foregroundColor: AppColors.lightText,
       ),
-      textTheme: base.textTheme.apply(
+      textTheme: GoogleFonts.interTextTheme(base.textTheme).apply(
         bodyColor: AppColors.lightText,
         displayColor: AppColors.lightText,
       ),
@@ -76,10 +76,9 @@ class AppTheme {
         scrolledUnderElevation: 0,
         foregroundColor: AppColors.darkText,
       ),
-      textTheme: base.textTheme.apply(
-        bodyColor: AppColors.darkText,
-        displayColor: AppColors.darkText,
-      ),
+      textTheme: GoogleFonts.interTextTheme(
+        base.textTheme,
+      ).apply(bodyColor: AppColors.darkText, displayColor: AppColors.darkText),
       dividerColor: AppColors.darkBorder,
       iconTheme: const IconThemeData(color: AppColors.darkText),
     );
@@ -111,14 +110,20 @@ class AppTheme {
 }
 
 class AppText {
+  // v2 type system: one modern grotesk for the whole app shell.
+  //
+  // The method names are kept from v1 (`serif`, `mono`) so that every screen
+  // picks up the new look without a 200-call-site rename — but nothing here is
+  // a serif or a monospace any more. Landing and Create ID keep their own
+  // editorial styles on purpose.
   static TextStyle serif(
     double size, {
     Color? color,
-    FontWeight w = FontWeight.w600,
+    FontWeight w = FontWeight.w700,
     FontStyle style = FontStyle.normal,
-    double h = 1.05,
-    double ls = -0.5,
-  }) => GoogleFonts.fraunces(
+    double h = 1.12,
+    double ls = -0.7,
+  }) => GoogleFonts.plusJakartaSans(
     fontSize: size,
     color: color,
     fontWeight: w,
@@ -131,20 +136,16 @@ class AppText {
     double size, {
     Color? color,
     FontWeight w = FontWeight.w400,
-    double h = 1.55,
-  }) => GoogleFonts.interTight(
-    fontSize: size,
-    color: color,
-    fontWeight: w,
-    height: h,
-  );
+    double h = 1.5,
+  }) =>
+      GoogleFonts.inter(fontSize: size, color: color, fontWeight: w, height: h);
 
   static TextStyle mono(
     double size, {
     Color? color,
-    FontWeight w = FontWeight.w500,
+    FontWeight w = FontWeight.w600,
     double ls = 1.2,
-  }) => GoogleFonts.jetBrainsMono(
+  }) => GoogleFonts.inter(
     fontSize: size,
     color: color,
     fontWeight: w,

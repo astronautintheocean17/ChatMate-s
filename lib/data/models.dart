@@ -43,6 +43,9 @@ class RoomSummary {
   final int memberCount;
   final int unreadCount;
   final DateTime? lastMessageAt;
+  final String kind;
+  final String identityMode;
+  final String? otherHandle;
 
   const RoomSummary({
     required this.id,
@@ -56,9 +59,14 @@ class RoomSummary {
     required this.memberCount,
     required this.unreadCount,
     required this.lastMessageAt,
+    this.kind = 'group',
+    this.identityMode = 'mixed',
+    this.otherHandle,
   });
 
   bool get isCreator => role == 'creator';
+  bool get isDirect => kind == 'direct';
+  bool get revealsEveryone => identityMode == 'reveal';
   bool get isPrivate => visibility == 'private';
   bool get joinsInstantly => joinMode == 'open';
   bool get isLinkOnly => joinMode == 'open' && !openToAll;
@@ -81,6 +89,11 @@ class RoomSummary {
     memberCount: _parseInt(map['member_count']),
     unreadCount: _parseInt(map['unread_count']),
     lastMessageAt: _parseDate(map['last_message_at']),
+    kind: map['kind'] as String? ?? 'group',
+    identityMode: map['identity_mode'] as String? ?? 'mixed',
+    otherHandle: map['other_handle'] == null
+        ? null
+        : (map['other_handle'] as String).toLowerCase(),
   );
 }
 
@@ -147,6 +160,9 @@ class RoomDetails {
   final int memberCount;
   final String role;
   final DateTime? createdAt;
+  final String kind;
+  final String identityMode;
+  final String? otherHandle;
 
   const RoomDetails({
     required this.id,
@@ -160,9 +176,16 @@ class RoomDetails {
     required this.memberCount,
     required this.role,
     required this.createdAt,
+    this.kind = 'group',
+    this.identityMode = 'mixed',
+    this.otherHandle,
   });
 
   bool get isCreator => role == 'creator';
+  bool get isDirect => kind == 'direct';
+  bool get forcesAnonymous => identityMode == 'anonymous';
+  bool get revealsEveryone => identityMode == 'reveal';
+  bool get hasPerMessageReveal => identityMode == 'mixed';
   bool get isPrivate => visibility == 'private';
   bool get joinsInstantly => joinMode == 'open';
   bool get isLinkOnly => joinMode == 'open' && !openToAll;
@@ -185,6 +208,11 @@ class RoomDetails {
     memberCount: _parseInt(map['member_count']),
     role: map['my_role'] as String? ?? 'member',
     createdAt: _parseDate(map['created_at']),
+    kind: map['kind'] as String? ?? 'group',
+    identityMode: map['identity_mode'] as String? ?? 'mixed',
+    otherHandle: map['other_handle'] == null
+        ? null
+        : (map['other_handle'] as String).toLowerCase(),
   );
 }
 
@@ -349,6 +377,33 @@ class RoomAccessPreview {
       );
 }
 
+class MessageReaction {
+  final String emoji;
+  final int count;
+  final bool mine;
+
+  const MessageReaction({
+    required this.emoji,
+    required this.count,
+    required this.mine,
+  });
+
+  factory MessageReaction.fromMap(Map<String, dynamic> map) => MessageReaction(
+    emoji: map['emoji'] as String? ?? '',
+    count: _parseInt(map['count']),
+    mine: map['mine'] == true,
+  );
+
+  static List<MessageReaction> listFrom(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((row) => MessageReaction.fromMap(Map<String, dynamic>.from(row)))
+        .where((reaction) => reaction.emoji.isNotEmpty)
+        .toList();
+  }
+}
+
 class ChatMessage {
   final String id;
   final String roomId;
@@ -367,6 +422,10 @@ class ChatMessage {
   final String? caption;
   final String? stickerId;
   final int? durationMs;
+  final String? replyToId;
+  final String? replyPreview;
+  final String? replyHandle;
+  final List<MessageReaction> reactions;
 
   const ChatMessage({
     required this.id,
@@ -386,7 +445,14 @@ class ChatMessage {
     this.caption,
     this.stickerId,
     this.durationMs,
+    this.replyToId,
+    this.replyPreview,
+    this.replyHandle,
+    this.reactions = const [],
   });
+
+  bool get hasReply => !isDeleted && replyToId != null;
+  bool get hasReactions => !isDeleted && reactions.isNotEmpty;
 
   bool get isText => !isDeleted && kind == 'text';
   bool get isImage => !isDeleted && kind == 'image';
@@ -424,8 +490,38 @@ class ChatMessage {
       durationMs: map['duration_ms'] == null
           ? null
           : _parseInt(map['duration_ms']),
+      replyToId: map['reply_to_id'] as String?,
+      replyPreview: map['reply_preview'] as String?,
+      replyHandle: map['reply_handle'] == null
+          ? null
+          : (map['reply_handle'] as String).toLowerCase(),
+      reactions: MessageReaction.listFrom(map['reactions']),
     );
   }
+
+  ChatMessage copyWith({List<MessageReaction>? reactions}) => ChatMessage(
+    id: id,
+    roomId: roomId,
+    text: text,
+    createdAt: createdAt,
+    isMine: isMine,
+    isDeleted: isDeleted,
+    revealSender: revealSender,
+    senderHandle: senderHandle,
+    seenCount: seenCount,
+    kind: kind,
+    mediaPath: mediaPath,
+    mime: mime,
+    width: width,
+    height: height,
+    caption: caption,
+    stickerId: stickerId,
+    durationMs: durationMs,
+    replyToId: replyToId,
+    replyPreview: replyPreview,
+    replyHandle: replyHandle,
+    reactions: reactions ?? this.reactions,
+  );
 }
 
 class SeenReceipt {

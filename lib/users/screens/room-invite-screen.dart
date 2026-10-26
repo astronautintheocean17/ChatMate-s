@@ -6,7 +6,7 @@ import '../../data/models.dart';
 import '../../data/room-service.dart';
 import '../../theme/app-theme.dart';
 import 'chat-room-screen.dart';
-import 'home-screen.dart';
+import '../../common/screens/app-shell.dart';
 
 /// The landing screen for a shared room link.
 ///
@@ -95,7 +95,7 @@ class _RoomInviteScreenState extends State<RoomInviteScreen> {
 
   Future<void> _goHome() async {
     await Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const AppShell()),
       (_) => false,
     );
   }

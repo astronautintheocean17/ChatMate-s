@@ -59,14 +59,41 @@ Also confirm **Email** provider is enabled (it is by default). The admin uses it
 
 ### Existing ChatMate project (already has tables)
 
-Run these two files **in order**, each in a new SQL Editor query:
+Run these files **in order**, each in a new SQL Editor query:
 
 1. `supabase/0002_invite_links.sql`
 2. `supabase/0003_three_join_modes.sql`
+3. `supabase/0004_media.sql` — private photos, GIFs, stickers, 30-second videos
+4. `supabase/0005_v2_social.sql` — the v2 social layer (see below)
 
-If you already ran `0002`, you only need `0003`. Both files are safe to run more
-than once. `0003` adds `rooms.open_to_all` and replaces the room RPCs so the
-three modes behave exactly as labelled:
+Every file is safe to run more than once.
+
+#### What `0005_v2_social.sql` adds
+
+| Piece | What it does |
+|---|---|
+| `rooms.kind` | `group` or `direct`; a pair can only ever have one direct room |
+| `rooms.identity_mode` | `mixed` (per-message, the v1 default), `anonymous`, or `reveal` |
+| `chat_requests` | the 1:1 request flow before a direct chat exists |
+| `messages.reply_to_id` | quoted replies |
+| `message_reactions` | one emoji per person per message |
+| `device_tokens` / `push_queue` | FCM token storage and the outbound notification queue |
+| `my_conversations()` | one WhatsApp-style list of direct chats *and* groups |
+| `home_search()` | search limited to my own rooms and the people I chat with |
+| `search_profiles()` | ID search by keyword — blank query returns nothing, never a browse-all |
+| `start_direct_chat()` / `respond_chat_request()` | send, accept, decline a chat request |
+| `react_message()` / `set_room_identity()` | reactions and the creator's room-wide anonymity switch |
+| `register_device_token()` | attach this device to this profile |
+
+The identity switch is deliberately retroactive: setting a group to
+**REVEAL CHATS** reveals the sender of every message already in it, and setting
+it to **ANONYMOUS CHAT** hides all of them. `room_messages()` and
+`my_conversations()` both resolve `sender_handle` from the room's mode, so a
+modified client cannot undo it.
+
+#### The three room modes
+
+
 
 | Mode | Search | Joining |
 |---|---|---|
@@ -225,7 +252,62 @@ Permission checks to try (they should all fail):
   (`room:<uuid>`), so even a guessed channel name reveals no message text or
   sender. Message content is always fetched through the membership-checked
   `room_messages` RPC.
-- **No file uploads / voice notes / reactions** in this build.
+- **No voice notes** in this build. Photos, GIFs, stickers and 30-second videos
+  are supported, plus replies, reactions and an optional per-room reveal switch.
 - If realtime requests do not refresh instantly, make sure step 3's
   `alter publication supabase_realtime add table public.room_requests;` ran.
   Pull-to-refresh / reopening the sheet still works.
+
+---
+
+## 9. Push notifications (optional)
+
+Push is a bonus layer. With none of this configured the app still works; it just
+never shows a notification while closed.
+
+1. **Deploy the function**
+
+   ```bash
+   supabase functions deploy push --no-verify-jwt
+   ```
+
+   `--no-verify-jwt` is required because the caller is `pg_cron`, not a signed-in
+   user. The `x-push-secret` header is what protects it.
+
+2. **Give it the Firebase service account** (Project settings → Service accounts
+   → *Generate new private key*):
+
+   ```bash
+   supabase secrets set FIREBASE_SERVICE_ACCOUNT="$(cat ~/secrets/chatmate-firebase.json)"
+   supabase secrets set PUSH_SECRET="$(openssl rand -hex 32)"
+   ```
+
+   Never commit that JSON file.
+
+3. **Point the schedule at the function** — run once in the SQL editor:
+
+   ```sql
+   select vault.create_secret(
+     'https://<PROJECT-REF>.functions.supabase.co/push', 'push_url');
+   select vault.create_secret(
+     '<the same value you passed to PUSH_SECRET>', 'push_secret');
+   ```
+
+   `0005_v2_social.sql` already scheduled `chatmate-push-flush` to call
+   `public.trigger_push_flush()` every 20 seconds. Until the two vault secrets
+   exist that function returns immediately.
+
+4. **Web push** also needs a VAPID key. Firebase console → Project settings →
+   Cloud Messaging → Web configuration → *Web Push certificates*. Paste it into
+   `kWebPushVapidKey` in `lib/data/push-service.dart` and make sure
+   `web/firebase-messaging-sw.js` is deployed with the site.
+
+5. **iOS** needs an Apple Developer Program account: Xcode → Runner → Signing &
+   Capabilities → **+ Push Notifications**, then upload an APNs `.p8` key to
+   Firebase. `ios/Runner/Runner.entitlements` and the `remote-notification`
+   background mode are already in place, so this is the only missing piece.
+
+Notifications respect anonymity. A message in an anonymous room is delivered as
+`New message in <room>` with no handle; a revealed room shows `@handle in
+<room>`; a direct chat shows `@handle`.
+

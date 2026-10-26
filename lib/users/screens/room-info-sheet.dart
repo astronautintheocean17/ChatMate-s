@@ -9,6 +9,7 @@ import '../../data/models.dart';
 import '../../data/profile-service.dart';
 import '../../data/room-link-service.dart';
 import '../../data/room-service.dart';
+import '../../data/social-service.dart';
 import '../../theme/app-theme.dart';
 
 class RoomInfoSheet extends StatefulWidget {
@@ -36,6 +37,7 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
   bool _refreshing = false;
   bool _saving = false;
   bool _inviting = false;
+  bool _identitySaving = false;
   bool _nameInitialized = false;
   String _accessMode = 'request';
   String? _busyRequestId;
@@ -125,6 +127,20 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
     );
     channel.subscribe();
     _channel = channel;
+  }
+
+  Future<void> _setIdentity(String mode) async {
+    if (_identitySaving) return;
+    setState(() => _identitySaving = true);
+    try {
+      await SocialService.setIdentity(widget.roomId, mode);
+      await _load(silent: true);
+      widget.onChanged();
+    } catch (error) {
+      _snack(friendlyError(error));
+    } finally {
+      if (mounted) setState(() => _identitySaving = false);
+    }
   }
 
   Future<void> _saveRoom() async {
@@ -356,6 +372,10 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
                       ),
                       children: [
                         _buildRoomSection(details),
+                        if (details.isCreator && !details.isDirect) ...[
+                          const SizedBox(height: 18),
+                          _buildIdentitySection(details),
+                        ],
                         const SizedBox(height: 18),
                         _buildCodeSection(details),
                         if (details.isCreator || details.joinsInstantly) ...[
@@ -384,6 +404,108 @@ class _RoomInfoSheetState extends State<RoomInfoSheet> {
                   ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildIdentitySection(RoomDetails details) {
+    final current = details.identityMode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _label('WHO IS VISIBLE'),
+        _card([
+          Text(
+            'This covers every message in the room — the ones already sent '
+            'and the ones still to come.',
+            style: AppText.body(12, color: AppTheme.muted(context), h: 1.5),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _identityOption(
+                  title: 'ANONYMOUS CHAT',
+                  caption: 'No name, ever',
+                  active: current == 'anonymous',
+                  icon: Icons.visibility_off_outlined,
+                  mode: 'anonymous',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _identityOption(
+                  title: 'REVEAL CHATS',
+                  caption: 'Every message signed',
+                  active: current == 'reveal',
+                  icon: Icons.visibility_rounded,
+                  mode: 'reveal',
+                ),
+              ),
+            ],
+          ),
+          if (current == 'mixed') ...[
+            const SizedBox(height: 10),
+            Text(
+              'Right now each person chooses per message.',
+              style: AppText.body(11.5, color: AppTheme.muted(context)),
+            ),
+          ],
+          if (_identitySaving) ...[
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              minHeight: 2,
+              color: AppTheme.accent(context),
+              backgroundColor: AppTheme.line(context),
+            ),
+          ],
+        ]),
+      ],
+    );
+  }
+
+  Widget _identityOption({
+    required String title,
+    required String caption,
+    required bool active,
+    required IconData icon,
+    required String mode,
+  }) {
+    final accent = AppTheme.accent(context);
+    return InkWell(
+      onTap: _identitySaving ? null : () => _setIdentity(mode),
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+        decoration: BoxDecoration(
+          color: active ? accent.withValues(alpha: 0.1) : AppTheme.bg(context),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: active ? accent : AppTheme.line(context)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: active ? accent : AppTheme.muted(context),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: AppText.mono(
+                8.5,
+                color: active ? accent : AppTheme.ink(context),
+                ls: 1,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              caption,
+              style: AppText.body(10.5, color: AppTheme.muted(context)),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -5,7 +5,10 @@ import '../theme/app-theme.dart';
 
 enum AttachChoice { imageCamera, imageGallery, gif, sticker, video }
 
-Future<AttachChoice?> showMediaAttachSheet(BuildContext context) {
+Future<AttachChoice?> showMediaAttachSheet(
+  BuildContext context, {
+  bool includeSticker = true,
+}) {
   return showModalBottomSheet<AttachChoice>(
     context: context,
     backgroundColor: AppTheme.surface(context),
@@ -69,12 +72,13 @@ Future<AttachChoice?> showMediaAttachSheet(BuildContext context) {
                   label: 'GIF',
                   onTap: () => Navigator.pop(sheetContext, AttachChoice.gif),
                 ),
-                _AttachTile(
-                  icon: Icons.emoji_emotions_outlined,
-                  label: 'STICKER',
-                  onTap: () =>
-                      Navigator.pop(sheetContext, AttachChoice.sticker),
-                ),
+                if (includeSticker)
+                  _AttachTile(
+                    icon: Icons.emoji_emotions_outlined,
+                    label: 'STICKER',
+                    onTap: () =>
+                        Navigator.pop(sheetContext, AttachChoice.sticker),
+                  ),
                 _AttachTile(
                   icon: Icons.videocam_outlined,
                   label: 'VIDEO',

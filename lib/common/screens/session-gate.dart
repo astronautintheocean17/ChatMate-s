@@ -7,8 +7,8 @@ import '../../data/errors.dart';
 import '../../data/profile-service.dart';
 import '../../data/room-link-service.dart';
 import '../../theme/app-theme.dart';
-import '../../users/screens/home-screen.dart';
 import '../../users/screens/room-invite-screen.dart';
+import 'app-shell.dart';
 import 'create-id-screen.dart';
 import 'landing-screen.dart';
 
@@ -65,7 +65,7 @@ class _SessionGateState extends State<SessionGate> {
         } else if (inviteCode != null) {
           _destination = RoomInviteScreen(code: inviteCode);
         } else {
-          _destination = const HomeScreen();
+          _destination = const AppShell();
         }
       });
     } catch (error) {

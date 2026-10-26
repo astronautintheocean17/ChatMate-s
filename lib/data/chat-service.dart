@@ -33,6 +33,7 @@ class ChatService {
     required String roomId,
     required String body,
     required bool revealSender,
+    String? replyTo,
   }) async {
     final result = await _client.rpc(
       'send_message',
@@ -40,6 +41,7 @@ class ChatService {
         'p_room_id': roomId,
         'p_body': body,
         'p_reveal_sender': revealSender,
+        'p_reply_to': replyTo,
       },
     );
     return result as String;
@@ -56,6 +58,7 @@ class ChatService {
     String? caption,
     String? stickerId,
     int? durationMs,
+    String? replyTo,
   }) async {
     final result = await _client.rpc(
       'send_message',
@@ -71,6 +74,7 @@ class ChatService {
         'p_caption': caption,
         'p_sticker_id': stickerId,
         'p_duration_ms': durationMs,
+        'p_reply_to': replyTo,
       },
     );
     return result as String;
