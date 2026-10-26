@@ -195,7 +195,7 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 12, 4),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
               child: Row(
                 children: [
                   Text(
@@ -205,19 +205,6 @@ class _SearchScreenState extends State<SearchScreen> {
                       color: AppTheme.ink(context),
                       ls: -0.8,
                     ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: 'Chat requests',
-                    icon: const Icon(Icons.mark_chat_unread_outlined, size: 19),
-                    onPressed: () async {
-                      await Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const RequestsScreen(),
-                        ),
-                      );
-                      if (mounted) _search(_controller.text);
-                    },
                   ),
                 ],
               ),

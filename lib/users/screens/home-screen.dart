@@ -3,6 +3,7 @@
 // direct chats, groups, and the chat requests waiting on me.
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -19,9 +20,11 @@ import '../../data/social-service.dart';
 import '../../theme/app-theme.dart';
 import 'chat-room-screen.dart';
 import 'create-room-screen.dart';
-import 'groups-screen.dart';
 import 'join-room-screen.dart';
 import 'requests-screen.dart';
+
+/// The two halves of the inbox switch: every recent chat, or groups only.
+enum _InboxFilter { chats, groups }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -39,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<HomeSearchEntry> _results = const [];
   Timer? _debounce;
   String _query = '';
+  _InboxFilter _filter = _InboxFilter.chats;
   bool _loading = true;
   bool _searching = false;
   String? _error;
@@ -193,20 +197,43 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.edit_outlined, size: 21),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            _topBar(),
-            _searchField(),
-            Expanded(
-              child: RefreshIndicator(
-                color: AppTheme.accent(context),
-                onRefresh: _load,
-                child: _query.trim().isEmpty
-                    ? _buildConversations()
-                    : _buildSearchResults(),
-              ),
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Top block: app bar, search, then the Chats / Groups switch sits
+            // in the space between the search bar and the divider. It takes
+            // ~36% of the screen and never more than 60% on short screens.
+            final header = math.min(
+              math.max(constraints.maxHeight * 0.36, 180.0),
+              constraints.maxHeight * 0.6,
+            );
+
+            return Column(
+              children: [
+                SizedBox(
+                  height: header,
+                  child: Column(
+                    children: [
+                      _topBar(),
+                      _searchField(),
+                      const Spacer(),
+                      _inboxSwitch(),
+                      const Spacer(),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, thickness: 1, color: AppTheme.line(context)),
+                Expanded(
+                  child: RefreshIndicator(
+                    color: AppTheme.accent(context),
+                    onRefresh: _load,
+                    child: _query.trim().isEmpty
+                        ? _buildConversations()
+                        : _buildSearchResults(),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -236,12 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           const Spacer(),
-          IconButton(
-            tooltip: 'Groups',
-            visualDensity: VisualDensity.compact,
-            icon: const Icon(Icons.groups_outlined, size: 20),
-            onPressed: () => _push(const GroupsScreen()),
-          ),
+          _inboxButton(),
           const ThemeToggleButton(),
           const SizedBox(width: 8),
           InkWell(
@@ -305,6 +327,174 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _inboxButton() {
+    final count = _requests.length + _invites.length;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          tooltip: 'Inbox',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.mark_chat_unread_outlined, size: 20),
+          onPressed: () => _push(const RequestsScreen()),
+        ),
+        if (count > 0)
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              constraints: const BoxConstraints(minWidth: 15),
+              decoration: BoxDecoration(
+                color: AppTheme.accent(context),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                count > 9 ? '9+' : '$count',
+                textAlign: TextAlign.center,
+                style: AppText.mono(8.5, color: Colors.white, ls: 0.2),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// The Chats / Groups switch: one rounded rectangle, two halves.
+  Widget _inboxSwitch() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Container(
+        height: 46,
+        decoration: BoxDecoration(
+          color: AppTheme.bg(context),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppTheme.line(context)),
+        ),
+        child: Row(
+          children: [
+            _switchHalf(
+              label: 'Chats',
+              icon: Icons.chat_bubble_outline_rounded,
+              value: _InboxFilter.chats,
+            ),
+            Container(width: 1, height: 22, color: AppTheme.line(context)),
+            _switchHalf(
+              label: 'Groups',
+              icon: Icons.groups_outlined,
+              value: _InboxFilter.groups,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _switchHalf({
+    required String label,
+    required IconData icon,
+    required _InboxFilter value,
+  }) {
+    final selected = _filter == value;
+    final accent = AppTheme.accent(context);
+    final color = selected ? accent : AppTheme.muted(context);
+
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(13),
+        onTap: () {
+          if (_filter == value) return;
+          setState(() => _filter = value);
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          margin: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: selected
+                ? accent.withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: AppText.body(
+                  13,
+                  color: color,
+                  w: selected ? FontWeight.w600 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Group-only view still needs a way to start or join one.
+  Widget _groupActions() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: _groupAction(
+              icon: Icons.group_add_rounded,
+              label: 'NEW GROUP',
+              onTap: () => _push(const CreateRoomScreen()),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _groupAction(
+              icon: Icons.key_rounded,
+              label: 'JOIN CODE',
+              onTap: () => _push(const JoinRoomScreen()),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _groupAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppTheme.accent(context),
+        side: BorderSide(color: AppTheme.line(context)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        minimumSize: const Size(0, 38),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppText.mono(9.5, ls: 1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildConversations() {
     if (_loading && _conversations.isEmpty) {
       return ListView(
@@ -321,6 +511,10 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    final visible = _filter == _InboxFilter.groups
+        ? _conversations.where((entry) => !entry.isDirect).toList()
+        : _conversations;
+
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
@@ -331,10 +525,24 @@ class _HomeScreenState extends State<HomeScreen> {
             count: _requests.length + _invites.length,
             onTap: () => _push(const RequestsScreen()),
           ),
-        if (_conversations.isEmpty)
-          _EmptyState(onCompose: _compose)
+        if (_filter == _InboxFilter.groups) _groupActions(),
+        if (visible.isEmpty)
+          _filter == _InboxFilter.groups
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(32, 48, 32, 20),
+                  child: Text(
+                    'No groups yet.\nCreate one, or join with a code.',
+                    textAlign: TextAlign.center,
+                    style: AppText.body(
+                      13,
+                      color: AppTheme.muted(context),
+                      h: 1.6,
+                    ),
+                  ),
+                )
+              : _EmptyState(onCompose: _compose)
         else
-          ..._conversations.map(
+          ...visible.map(
             (entry) => _ConversationTile(
               entry: entry,
               onTap: () => _openChat(entry.id, entry.title),
