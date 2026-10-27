@@ -151,4 +151,39 @@ class AppText {
     fontWeight: w,
     letterSpacing: ls,
   );
+
+  // The one book face in the app: the home hero's "Every room has a secret."
+  // block. Deliberately a real Times-style serif (letterpress, newspaper) and
+  // deliberately opt-in — every other surface keeps the grotesk above.
+  //
+  // No `google_fonts` fetch here: the stack asks the platform for Times New
+  // Roman first (iOS, macOS, web all ship it) and degrades to a Times-metric
+  // clone, then to the platform's generic serif on Android.
+  static const String classicFamily = 'Times New Roman';
+  static const List<String> classicFallback = <String>[
+    'Times',
+    'Tinos',
+    'Liberation Serif',
+    'Noto Serif',
+    'Georgia',
+    'serif',
+  ];
+
+  static TextStyle classic(
+    double size, {
+    Color? color,
+    FontWeight w = FontWeight.w400,
+    FontStyle style = FontStyle.normal,
+    double h = 1.5,
+    double ls = 0,
+  }) => TextStyle(
+    fontFamily: classicFamily,
+    fontFamilyFallback: classicFallback,
+    fontSize: size,
+    color: color,
+    fontWeight: w,
+    fontStyle: style,
+    height: h,
+    letterSpacing: ls,
+  );
 }

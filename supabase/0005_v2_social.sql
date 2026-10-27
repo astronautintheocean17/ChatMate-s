@@ -247,8 +247,6 @@ declare
   v_target_handle citext;
   v_key text;
   v_room uuid;
-  v_req uuid;
-  v_note text := nullif(btrim(coalesce(p_note, '')), '');
 begin
   if v_uid is null then
     raise exception 'You are not signed in.';
@@ -267,6 +265,8 @@ begin
 
   v_key := public.direct_key_for(v_uid, v_target);
 
+  -- A direct chat is a plain one-to-one room: no request, no code, no
+  -- anonymity. Tapping someone opens it straight away.
   select id into v_room from public.rooms where direct_key = v_key;
   if v_room is not null then
     return jsonb_build_object(
@@ -276,45 +276,28 @@ begin
     );
   end if;
 
-  -- They already asked us: accepting opens the chat straight away.
-  select id into v_req
-  from public.chat_requests
-  where from_id = v_target and to_id = v_uid and status = 'pending'
-  order by created_at desc
-  limit 1;
-
-  if v_req is not null then
-    perform public.respond_chat_request(v_req, true);
+  begin
+    insert into public.rooms (
+      name, code, visibility, join_mode, open_to_all, creator_id,
+      kind, direct_key, identity_mode
+    )
+    values (
+      'Direct chat', public.generate_room_code(), 'private', 'request', false,
+      v_uid, 'direct', v_key, 'mixed'
+    )
+    returning id into v_room;
+  exception when unique_violation then
+    -- Both sides tapped at the same moment: the first insert wins.
     select id into v_room from public.rooms where direct_key = v_key;
-    return jsonb_build_object(
-      'status', 'accepted',
-      'room_id', v_room,
-      'handle', v_target_handle
-    );
-  end if;
+  end;
 
-  -- We already asked them: stay pending, never spam a second request.
-  select id into v_req
-  from public.chat_requests
-  where from_id = v_uid and to_id = v_target and status = 'pending'
-  order by created_at desc
-  limit 1;
-
-  if v_req is not null then
-    return jsonb_build_object(
-      'status', 'requested',
-      'request_id', v_req,
-      'handle', v_target_handle
-    );
-  end if;
-
-  insert into public.chat_requests (from_id, to_id, note)
-  values (v_uid, v_target, v_note)
-  returning id into v_req;
+  insert into public.room_members (room_id, user_id, role)
+  values (v_room, v_uid, 'member'), (v_room, v_target, 'member')
+  on conflict do nothing;
 
   return jsonb_build_object(
-    'status', 'requested',
-    'request_id', v_req,
+    'status', 'created',
+    'room_id', v_room,
     'handle', v_target_handle
   );
 end;

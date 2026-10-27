@@ -98,6 +98,22 @@ class SocialService {
     return (result as Map)['action'] as String? ?? 'set';
   }
 
+  /// Who reacted with what, oldest first.
+  ///
+  /// Only call this where the room already shows names: it resolves handles
+  /// from `profiles`, which every signed-in user may read.
+  static Future<List<MessageReactor>> messageReactors(String messageId) async {
+    final rows = await _client
+        .from('message_reactions')
+        .select(
+          'user_id, emoji, created_at, '
+          'profiles!message_reactions_user_id_fkey(handle, display_name)',
+        )
+        .eq('message_id', messageId)
+        .order('created_at');
+    return _rows(rows).map(MessageReactor.fromMap).toList();
+  }
+
   static Future<void> setIdentity(String roomId, String mode) async {
     await _client.rpc(
       'set_room_identity',

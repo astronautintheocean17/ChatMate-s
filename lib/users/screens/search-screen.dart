@@ -12,7 +12,6 @@ import '../../data/social-models.dart';
 import '../../data/social-service.dart';
 import '../../theme/app-theme.dart';
 import 'chat-room-screen.dart';
-import 'requests-screen.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -104,79 +103,28 @@ class _SearchScreenState extends State<SearchScreen> {
     if (mounted) _search(_controller.text);
   }
 
+  /// Tapping a person opens the chat straight away — no request, no note.
   Future<void> _startChat(ProfileSearchResult entry) async {
-    final noteController = TextEditingController();
-    final note = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppTheme.surface(dialogContext),
-        shape: const RoundedRectangleBorder(),
-        title: Text(
-          'Chat with @${entry.handle}?',
-          style: AppText.serif(20, color: AppTheme.ink(dialogContext)),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'They get a request first. Nothing opens until they accept.',
-              style: AppText.body(
-                12,
-                color: AppTheme.muted(dialogContext),
-                h: 1.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: noteController,
-              maxLength: 200,
-              maxLines: 3,
-              minLines: 1,
-              style: AppText.body(13, color: AppTheme.ink(dialogContext)),
-              decoration: const InputDecoration(
-                hintText: 'Add a note (optional)',
-                isDense: true,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('CANCEL'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, noteController.text),
-            child: const Text('SEND REQUEST'),
-          ),
-        ],
-      ),
-    );
-    noteController.dispose();
-
-    if (note == null || !mounted) return;
-
     setState(() => _busy.add(entry.handle));
     try {
-      final result = await SocialService.startChat(entry.handle, note: note);
+      final result = await SocialService.startChat(entry.handle);
       if (!mounted) return;
-      final status = result['status'] as String?;
       final roomId = result['room_id'] as String?;
-
-      if (roomId != null && (status == 'existing' || status == 'accepted')) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                ChatRoomScreen(roomId: roomId, roomName: '@${entry.handle}'),
+      if (roomId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open a chat with @${entry.handle}.'),
           ),
         );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Request sent to @${entry.handle}.')),
-        );
+        return;
       }
-      await _search(_controller.text);
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              ChatRoomScreen(roomId: roomId, roomName: '@${entry.handle}'),
+        ),
+      );
+      if (mounted) _search(_controller.text);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -328,29 +276,11 @@ class _SearchScreenState extends State<SearchScreen> {
           style: AppText.mono(9.5, color: AppTheme.accent(context)),
         ),
       );
-    } else if (entry.requestPending) {
-      action = Text(
-        'REQUESTED',
-        style: AppText.mono(9, color: AppTheme.muted(context), ls: 1),
-      );
-    } else if (entry.requestWaiting) {
-      action = TextButton(
-        onPressed: () async {
-          await Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const RequestsScreen()));
-          if (mounted) _search(_controller.text);
-        },
-        child: Text(
-          'REVIEW',
-          style: AppText.mono(9.5, color: AppTheme.accent(context)),
-        ),
-      );
     } else {
       action = TextButton(
         onPressed: () => _startChat(entry),
         child: Text(
-          'REQUEST',
+          'CHAT',
           style: AppText.mono(9.5, color: AppTheme.accent(context)),
         ),
       );
@@ -358,6 +288,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      onTap: () => entry.alreadyChatting ? _openChat(entry) : _startChat(entry),
       leading: MateAvatar(handle: entry.handle, size: 44),
       title: Text(
         '@${entry.handle}',
@@ -370,12 +301,8 @@ class _SearchScreenState extends State<SearchScreen> {
       subtitle: Text(
         entry.alreadyChatting
             ? 'In your chats'
-            : entry.requestPending
-            ? 'Waiting for them to accept'
-            : entry.requestWaiting
-            ? 'They asked to chat with you'
             : (entry.displayName.trim().isEmpty
-                  ? 'Start a private chat'
+                  ? 'Tap to open the chat'
                   : entry.displayName.trim()),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,

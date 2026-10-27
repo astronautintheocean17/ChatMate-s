@@ -148,4 +148,29 @@ void main() {
       expect(list.single.emoji, '🔥');
     });
   });
+  group('MessageReactor', () {
+    test('reads the joined profile and lowercases the handle', () {
+      final reactor = MessageReactor.fromMap({
+        'user_id': 'u-1',
+        'emoji': '🙏',
+        'created_at': '2026-01-02T03:04:05.000Z',
+        'profiles': {'handle': 'NightOwl', 'display_name': 'Night Owl'},
+      });
+
+      expect(reactor.userId, 'u-1');
+      expect(reactor.emoji, '🙏');
+      expect(reactor.handle, 'nightowl');
+      expect(reactor.hasHandle, isTrue);
+      expect(reactor.displayName, 'Night Owl');
+      expect(reactor.createdAt, isNotNull);
+    });
+
+    test('survives a missing profile row', () {
+      final reactor = MessageReactor.fromMap({'user_id': 'u-2', 'emoji': '😂'});
+
+      expect(reactor.hasHandle, isFalse);
+      expect(reactor.displayName, isEmpty);
+      expect(reactor.createdAt, isNull);
+    });
+  });
 }

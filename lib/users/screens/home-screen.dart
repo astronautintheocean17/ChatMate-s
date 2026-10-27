@@ -3,7 +3,6 @@
 // direct chats, groups, and the chat requests waiting on me.
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -20,11 +19,12 @@ import '../../data/social-service.dart';
 import '../../theme/app-theme.dart';
 import 'chat-room-screen.dart';
 import 'create-room-screen.dart';
+import 'existing-rooms-screen.dart';
 import 'join-room-screen.dart';
 import 'requests-screen.dart';
 
-/// The two halves of the inbox switch: every recent chat, or groups only.
-enum _InboxFilter { chats, groups }
+/// The inbox switch: everything I am part of, groups only, or chats only.
+enum _InboxFilter { all, groups, chats }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -42,7 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<HomeSearchEntry> _results = const [];
   Timer? _debounce;
   String _query = '';
-  _InboxFilter _filter = _InboxFilter.chats;
+  _InboxFilter _filter = _InboxFilter.all;
   bool _loading = true;
   bool _searching = false;
   String? _error;
@@ -101,6 +101,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _debounce = Timer(const Duration(milliseconds: 260), () => _search(value));
   }
 
+  /// Home search only ever looks inside my own chats and rooms — anyone at all
+  /// is found in the Search tab.
   Future<void> _search(String value) async {
     setState(() => _searching = true);
     try {
@@ -129,111 +131,25 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) _load();
   }
 
-  Future<void> _compose() async {
-    final choice = await showModalBottomSheet<String>(
-      context: context,
-      backgroundColor: AppTheme.surface(context),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 36,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppTheme.line(sheetContext),
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _SheetAction(
-              icon: Icons.person_add_alt_1_rounded,
-              title: 'New chat',
-              subtitle: 'Send a request to a ChatMate ID',
-              onTap: () => Navigator.pop(sheetContext, 'chat'),
-            ),
-            _SheetAction(
-              icon: Icons.group_add_rounded,
-              title: 'New group',
-              subtitle: 'Create a room for your circle',
-              onTap: () => Navigator.pop(sheetContext, 'group'),
-            ),
-            _SheetAction(
-              icon: Icons.key_rounded,
-              title: 'Join with a code',
-              subtitle: 'Enter a room name or code',
-              onTap: () => Navigator.pop(sheetContext, 'join'),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-
-    if (!mounted || choice == null) return;
-    switch (choice) {
-      case 'chat':
-        AppShell.open(context, AppTab.search);
-      case 'group':
-        await _push(const CreateRoomScreen());
-      case 'join':
-        await _push(const JoinRoomScreen());
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surface(context),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _compose,
-        backgroundColor: AppTheme.accent(context),
-        foregroundColor: Colors.white,
-        elevation: 2,
-        child: const Icon(Icons.edit_outlined, size: 21),
-      ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Top block: app bar, search, then the Chats / Groups switch sits
-            // in the space between the search bar and the divider. It takes
-            // ~36% of the screen and never more than 60% on short screens.
-            final header = math.min(
-              math.max(constraints.maxHeight * 0.36, 180.0),
-              constraints.maxHeight * 0.6,
-            );
-
-            return Column(
-              children: [
-                SizedBox(
-                  height: header,
-                  child: Column(
-                    children: [
-                      _topBar(),
-                      _searchField(),
-                      const Spacer(),
-                      _inboxSwitch(),
-                      const Spacer(),
-                    ],
-                  ),
-                ),
-                Divider(height: 1, thickness: 1, color: AppTheme.line(context)),
-                Expanded(
-                  child: RefreshIndicator(
-                    color: AppTheme.accent(context),
-                    onRefresh: _load,
-                    child: _query.trim().isEmpty
-                        ? _buildConversations()
-                        : _buildSearchResults(),
-                  ),
-                ),
-              ],
-            );
-          },
+        child: Column(
+          children: [
+            _topBar(),
+            _searchField(),
+            Expanded(
+              child: RefreshIndicator(
+                color: AppTheme.accent(context),
+                onRefresh: _load,
+                child: _query.trim().isEmpty
+                    ? _buildConversations()
+                    : _buildSearchResults(),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -304,7 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 decoration: InputDecoration(
                   isDense: true,
                   border: InputBorder.none,
-                  hintText: 'Search chats and groups',
+                  hintText: 'Search your chats and rooms',
                   hintStyle: AppText.body(13.5, color: AppTheme.muted(context)),
                 ),
               ),
@@ -332,27 +248,44 @@ class _HomeScreenState extends State<HomeScreen> {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        IconButton(
-          tooltip: 'Inbox',
-          visualDensity: VisualDensity.compact,
-          icon: const Icon(Icons.mark_chat_unread_outlined, size: 20),
-          onPressed: () => _push(const RequestsScreen()),
+        InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _push(const RequestsScreen()),
+          child: Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppTheme.bg(context),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.line(context)),
+            ),
+            child: Icon(
+              Icons.inbox_outlined,
+              size: 22,
+              color: AppTheme.ink(context),
+            ),
+          ),
         ),
         if (count > 0)
           Positioned(
-            right: 4,
-            top: 4,
+            right: -3,
+            top: -3,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-              constraints: const BoxConstraints(minWidth: 15),
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+              constraints: const BoxConstraints(minWidth: 17),
               decoration: BoxDecoration(
                 color: AppTheme.accent(context),
                 borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: AppTheme.surface(context),
+                  width: 1.5,
+                ),
               ),
               child: Text(
                 count > 9 ? '9+' : '$count',
                 textAlign: TextAlign.center,
-                style: AppText.mono(8.5, color: Colors.white, ls: 0.2),
+                style: AppText.mono(9.5, color: Colors.white, ls: 0.2),
               ),
             ),
           ),
@@ -360,12 +293,104 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// The Chats / Groups switch: one rounded rectangle, two halves.
+  /// The opening copy from the very first ChatMate home screen.
+  Widget _hero() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 4, 24, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text.rich(
+            TextSpan(
+              children: [
+                const TextSpan(text: 'Every room\nhas a '),
+                TextSpan(
+                  text: 'secret.',
+                  style: AppText.classic(
+                    34,
+                    color: AppTheme.accent(context),
+                    style: FontStyle.italic,
+                    h: 1.0,
+                  ),
+                ),
+              ],
+            ),
+            style: AppText.classic(
+              34,
+              color: AppTheme.ink(context),
+              w: FontWeight.w700,
+              h: 1.0,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Open a room you already belong to, start a new one for your '
+            'circle, or join with a search. Inside, nothing you say carries '
+            'your name.',
+            style: AppText.classic(
+              12.5,
+              color: AppTheme.muted(context),
+              h: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// New room / Enter / All your rooms — the first commit's three cards.
+  Widget _actionCards(int joined) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: _ActionCard(
+                    label: 'CREATE',
+                    title: 'New room',
+                    caption: 'Start a private space',
+                    icon: Icons.add_rounded,
+                    filled: true,
+                    onTap: () => _push(const CreateRoomScreen()),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ActionCard(
+                    label: 'JOIN',
+                    title: 'Enter',
+                    caption: 'Use a name or code',
+                    icon: Icons.subdirectory_arrow_right_rounded,
+                    filled: true,
+                    onTap: () => _push(const JoinRoomScreen()),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _ActionCard(
+            label: 'LIBRARY',
+            title: 'All your rooms',
+            caption: '$joined joined · open and manage',
+            icon: Icons.grid_view_rounded,
+            onTap: () => _push(const ExistingRoomsScreen()),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// All / Groups / Chats: which slice of the recents is on screen.
   Widget _inboxSwitch() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
-        height: 46,
+        height: 44,
         decoration: BoxDecoration(
           color: AppTheme.bg(context),
           borderRadius: BorderRadius.circular(14),
@@ -373,28 +398,18 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: Row(
           children: [
-            _switchHalf(
-              label: 'Chats',
-              icon: Icons.chat_bubble_outline_rounded,
-              value: _InboxFilter.chats,
-            ),
-            Container(width: 1, height: 22, color: AppTheme.line(context)),
-            _switchHalf(
-              label: 'Groups',
-              icon: Icons.groups_outlined,
-              value: _InboxFilter.groups,
-            ),
+            _switchHalf(label: 'ALL', value: _InboxFilter.all),
+            Container(width: 1, height: 20, color: AppTheme.line(context)),
+            _switchHalf(label: 'GROUPS', value: _InboxFilter.groups),
+            Container(width: 1, height: 20, color: AppTheme.line(context)),
+            _switchHalf(label: 'CHATS', value: _InboxFilter.chats),
           ],
         ),
       ),
     );
   }
 
-  Widget _switchHalf({
-    required String label,
-    required IconData icon,
-    required _InboxFilter value,
-  }) {
+  Widget _switchHalf({required String label, required _InboxFilter value}) {
     final selected = _filter == value;
     final accent = AppTheme.accent(context);
     final color = selected ? accent : AppTheme.muted(context);
@@ -409,86 +424,48 @@ class _HomeScreenState extends State<HomeScreen> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 160),
           margin: const EdgeInsets.all(5),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: selected
                 ? accent.withValues(alpha: 0.12)
                 : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 7),
-              Text(
-                label,
-                style: AppText.body(
-                  13,
-                  color: color,
-                  w: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
-              ),
-            ],
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppText.mono(
+              10.5,
+              color: color,
+              ls: 1.1,
+              w: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
           ),
         ),
       ),
     );
   }
 
-  /// Group-only view still needs a way to start or join one.
-  Widget _groupActions() {
+  /// The count line above the recents, named after the active filter.
+  Widget _sectionHeader(int count) {
+    final label = switch (_filter) {
+      _InboxFilter.all => 'ALL RECENTS',
+      _InboxFilter.groups => 'GROUPS',
+      _InboxFilter.chats => 'CHATS',
+    };
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 4),
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
       child: Row(
         children: [
-          Expanded(
-            child: _groupAction(
-              icon: Icons.group_add_rounded,
-              label: 'NEW GROUP',
-              onTap: () => _push(const CreateRoomScreen()),
-            ),
+          Text(
+            label,
+            style: AppText.mono(11, color: AppTheme.muted(context), ls: 1.6),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _groupAction(
-              icon: Icons.key_rounded,
-              label: 'JOIN CODE',
-              onTap: () => _push(const JoinRoomScreen()),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _groupAction({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return OutlinedButton(
-      onPressed: onTap,
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppTheme.accent(context),
-        side: BorderSide(color: AppTheme.line(context)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        minimumSize: const Size(0, 38),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.mono(9.5, ls: 1),
-            ),
+          const Spacer(),
+          Text(
+            '$count',
+            style: AppText.mono(11, color: AppTheme.accent(context)),
           ),
         ],
       ),
@@ -496,51 +473,39 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildConversations() {
-    if (_loading && _conversations.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        children: [
-          const SizedBox(height: 120),
-          Center(
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: AppTheme.accent(context),
-            ),
-          ),
-        ],
-      );
-    }
-
-    final visible = _filter == _InboxFilter.groups
-        ? _conversations.where((entry) => !entry.isDirect).toList()
-        : _conversations;
+    final groups = _conversations.where((entry) => !entry.isDirect).toList();
+    final chats = _conversations.where((entry) => entry.isDirect).toList();
+    final visible = switch (_filter) {
+      _InboxFilter.groups => groups,
+      _InboxFilter.chats => chats,
+      _InboxFilter.all => [..._conversations]..sort(_newestFirst),
+    };
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(0, 4, 0, 12),
+      padding: const EdgeInsets.only(bottom: 24),
       children: [
         if (_error != null) _Banner(message: _error!, onRetry: _load),
-        if (_requests.isNotEmpty || _invites.isNotEmpty)
+        _hero(),
+        _actionCards(groups.length),
+        const SizedBox(height: 26),
+        _inboxSwitch(),
+        if (_invites.isNotEmpty && _filter != _InboxFilter.chats) ...[
+          const SizedBox(height: 10),
           _RequestsBanner(
-            count: _requests.length + _invites.length,
+            count: _invites.length,
             onTap: () => _push(const RequestsScreen()),
           ),
-        if (_filter == _InboxFilter.groups) _groupActions(),
-        if (visible.isEmpty)
-          _filter == _InboxFilter.groups
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(32, 48, 32, 20),
-                  child: Text(
-                    'No groups yet.\nCreate one, or join with a code.',
-                    textAlign: TextAlign.center,
-                    style: AppText.body(
-                      13,
-                      color: AppTheme.muted(context),
-                      h: 1.6,
-                    ),
-                  ),
-                )
-              : _EmptyState(onCompose: _compose)
+        ],
+        const SizedBox(height: 20),
+        _sectionHeader(visible.length),
+        if (_loading && _conversations.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 36),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          )
+        else if (visible.isEmpty)
+          _emptyForFilter()
         else
           ...visible.map(
             (entry) => _ConversationTile(
@@ -548,8 +513,33 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => _openChat(entry.id, entry.title),
             ),
           ),
-        const SizedBox(height: 90),
       ],
+    );
+  }
+
+  int _newestFirst(ConversationEntry a, ConversationEntry b) {
+    final left = a.lastMessageAt;
+    final right = b.lastMessageAt;
+    if (left == null && right == null) return 0;
+    if (left == null) return 1;
+    if (right == null) return -1;
+    return right.compareTo(left);
+  }
+
+  Widget _emptyForFilter() {
+    if (_filter == _InboxFilter.chats) {
+      return _EmptyState(onSearch: () => AppShell.open(context, AppTab.search));
+    }
+    final copy = _filter == _InboxFilter.groups
+        ? 'No groups yet.\nUse New room above, or enter a code.'
+        : 'Nothing here yet.\nCreate a room, or find someone in Search.';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 24, 32, 20),
+      child: Text(
+        copy,
+        textAlign: TextAlign.center,
+        style: AppText.body(13, color: AppTheme.muted(context), h: 1.6),
+      ),
     );
   }
 
@@ -594,39 +584,50 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 90),
-      itemCount: _results.length,
-      itemBuilder: (context, index) {
-        final entry = _results[index];
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 18,
-            vertical: 2,
-          ),
-          leading: MateAvatar(
-            handle: entry.handle ?? entry.title,
-            size: 44,
-            anonymous: entry.handle == null,
-          ),
-          title: Text(
-            entry.isChat ? '@${entry.handle}' : entry.title,
-            style: AppText.body(
-              14.5,
-              color: AppTheme.ink(context),
-              w: FontWeight.w600,
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        _searchLabel('YOUR CHATS & ROOMS'),
+        ..._results.map(
+          (entry) => ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 18,
+              vertical: 2,
             ),
+            leading: MateAvatar(
+              handle: entry.handle ?? entry.title,
+              size: 44,
+              anonymous: entry.handle == null,
+            ),
+            title: Text(
+              entry.isChat ? '@${entry.handle}' : entry.title,
+              style: AppText.body(
+                14.5,
+                color: AppTheme.ink(context),
+                w: FontWeight.w600,
+              ),
+            ),
+            subtitle: Text(
+              entry.isChat
+                  ? 'Private chat'
+                  : 'Group · ${entry.memberCount} member'
+                        '${entry.memberCount == 1 ? '' : 's'}',
+              style: AppText.body(11.5, color: AppTheme.muted(context)),
+            ),
+            onTap: () => _openChat(entry.id, entry.title),
           ),
-          subtitle: Text(
-            entry.isChat
-                ? 'Private chat'
-                : 'Group · ${entry.memberCount} member'
-                      '${entry.memberCount == 1 ? '' : 's'}',
-            style: AppText.body(11.5, color: AppTheme.muted(context)),
-          ),
-          onTap: () => _openChat(entry.id, entry.title),
-        );
-      },
+        ),
+      ],
+    );
+  }
+
+  Widget _searchLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 6),
+      child: Text(
+        label,
+        style: AppText.mono(10, color: AppTheme.muted(context), ls: 1.2),
+      ),
     );
   }
 }
@@ -806,14 +807,14 @@ class _RequestsBanner extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onCompose});
+  const _EmptyState({required this.onSearch});
 
-  final VoidCallback onCompose;
+  final VoidCallback onSearch;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 70, 32, 20),
+      padding: const EdgeInsets.fromLTRB(32, 44, 32, 20),
       child: Column(
         children: [
           Icon(Icons.forum_outlined, size: 34, color: AppTheme.accent(context)),
@@ -825,16 +826,16 @@ class _EmptyState extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Find a ChatMate ID and send a request, or open a room of your '
-            'own. Nothing shows your name until you say so.',
+            'Find a ChatMate ID in Search and the chat opens right away — no '
+            'requests. Rooms keep their own anonymity.',
             textAlign: TextAlign.center,
             style: AppText.body(13, color: AppTheme.muted(context), h: 1.6),
           ),
           const SizedBox(height: 20),
           FilledButton.icon(
-            onPressed: onCompose,
-            icon: const Icon(Icons.add_rounded, size: 18),
-            label: const Text('START A CHAT'),
+            onPressed: onSearch,
+            icon: const Icon(Icons.search_rounded, size: 18),
+            label: const Text('FIND SOMEONE'),
           ),
         ],
       ),
@@ -842,45 +843,66 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _SheetAction extends StatelessWidget {
-  const _SheetAction({
-    required this.icon,
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({
+    required this.label,
     required this.title,
-    required this.subtitle,
+    required this.caption,
+    required this.icon,
     required this.onTap,
+    this.filled = false,
   });
 
-  final IconData icon;
+  final String label;
   final String title;
-  final String subtitle;
+  final String caption;
+  final IconData icon;
   final VoidCallback onTap;
+  final bool filled;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-      leading: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppTheme.accent(context).withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
+    final bg = filled ? AppTheme.accent(context) : AppTheme.surface(context);
+    final fg = filled ? Colors.white : AppTheme.ink(context);
+    final sub = filled ? Colors.white70 : AppTheme.muted(context);
+    return Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: filled
+                  ? AppTheme.accent(context)
+                  : AppTheme.border(context),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(label, style: AppText.mono(8.5, color: sub, ls: 1.3)),
+                  const Spacer(),
+                  Icon(icon, size: 18, color: fg),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(title, style: AppText.serif(20, color: fg, h: 1.05)),
+              const SizedBox(height: 4),
+              Text(
+                caption,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppText.body(10.5, color: sub),
+              ),
+            ],
+          ),
         ),
-        child: Icon(icon, size: 19, color: AppTheme.accent(context)),
-      ),
-      title: Text(
-        title,
-        style: AppText.body(
-          14.5,
-          color: AppTheme.ink(context),
-          w: FontWeight.w600,
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: AppText.body(11.5, color: AppTheme.muted(context)),
       ),
     );
   }

@@ -113,6 +113,42 @@ class ConversationEntry {
       );
 }
 
+/// One person behind a reaction: who picked which emoji.
+///
+/// Only fetched for rooms that already show names — the handle is null when
+/// the profile row could not be read.
+class MessageReactor {
+  final String userId;
+  final String emoji;
+  final String? handle;
+  final String displayName;
+  final DateTime? createdAt;
+
+  const MessageReactor({
+    required this.userId,
+    required this.emoji,
+    required this.handle,
+    required this.displayName,
+    required this.createdAt,
+  });
+
+  bool get hasHandle => (handle ?? '').isNotEmpty;
+
+  factory MessageReactor.fromMap(Map<String, dynamic> map) {
+    final profile = map['profiles'];
+    final row = profile is Map
+        ? Map<String, dynamic>.from(profile)
+        : const <String, dynamic>{};
+    return MessageReactor(
+      userId: map['user_id'] as String? ?? '',
+      emoji: map['emoji'] as String? ?? '',
+      handle: _parseHandle(row['handle']),
+      displayName: (row['display_name'] as String?) ?? '',
+      createdAt: _parseDate(map['created_at']),
+    );
+  }
+}
+
 /// A result of the global ChatMate ID search, with my relationship to it.
 class ProfileSearchResult {
   final String id;

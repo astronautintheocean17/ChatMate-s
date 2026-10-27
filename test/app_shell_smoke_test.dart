@@ -77,39 +77,61 @@ void main() {
     await tester.tap(find.text('Search').last, warnIfMissed: false);
     await tester.pump();
     // Home is stacked away, so its search hint is offstage.
-    expect(find.text('Search chats and groups'), findsNothing);
+    expect(find.text('Search your chats and rooms'), findsNothing);
 
     await _pressBack(tester);
     expect(find.text('Leave ChatMate?'), findsNothing);
-    expect(find.text('Search chats and groups'), findsOneWidget);
+    expect(find.text('Search your chats and rooms'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('home shows the Chats / Groups switch on a phone', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    // Wide phone: the test font renders every glyph as a square, so a 360 pt
-    // screen would overflow the title even though real fonts fit.
-    tester.view.physicalSize = const Size(860, 1800);
-    tester.view.devicePixelRatio = 2;
-    addTearDown(tester.view.reset);
+  testWidgets(
+    'home shows the first-commit header and the All / Groups / Chats switch',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      // Wide phone: the test font renders every glyph as a square, so a 360 pt
+      // screen would overflow the title even though real fonts fit.
+      tester.view.physicalSize = const Size(860, 2400);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.reset);
 
-    await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light(), home: const HomeScreen()),
-    );
-    await tester.pump();
+      await tester.pumpWidget(
+        MaterialApp(theme: AppTheme.light(), home: const HomeScreen()),
+      );
+      await tester.pump();
 
-    expect(find.text('Chats'), findsOneWidget);
-    expect(find.text('Groups'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+      // The opening copy and the three action cards from the first commit.
+      expect(find.text('New room'), findsOneWidget);
+      expect(find.text('Enter'), findsOneWidget);
+      expect(find.text('All your rooms'), findsOneWidget);
 
-    await tester.tap(find.text('Groups'));
-    await tester.pumpAndSettle();
-    expect(find.text('NEW GROUP'), findsOneWidget);
-    expect(find.text('JOIN CODE'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.text('ALL'), findsOneWidget);
+      expect(find.text('GROUPS'), findsOneWidget);
+      expect(find.text('CHATS'), findsOneWidget);
+      // All on the left, then Groups, then Chats.
+      expect(
+        tester.getTopLeft(find.text('ALL')).dx <
+            tester.getTopLeft(find.text('GROUPS')).dx,
+        isTrue,
+      );
+      expect(
+        tester.getTopLeft(find.text('GROUPS')).dx <
+            tester.getTopLeft(find.text('CHATS')).dx,
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('CHATS'));
+      await tester.pumpAndSettle();
+      expect(find.text('No chats yet.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('GROUPS'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No groups yet.'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   for (final mode in [ThemeMode.light, ThemeMode.dark]) {
     testWidgets('create id renders in ${mode.name} mode', (tester) async {

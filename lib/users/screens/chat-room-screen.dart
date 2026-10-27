@@ -7,11 +7,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../common/utils/format.dart';
 import '../../common/widgets/link-text.dart';
 import '../../common/widgets/mate-avatar.dart';
+import '../../common/widgets/swipe-to-reply.dart';
 import '../../data/auth-service.dart';
 import '../../data/chat-service.dart';
 import '../../data/errors.dart';
 import '../../data/models.dart';
 import '../../data/room-service.dart';
+import '../../data/social-models.dart';
 import '../../data/social-service.dart';
 import '../../media/gif-picker-sheet.dart';
 import '../../media/giphy-service.dart';
@@ -43,6 +45,7 @@ class ChatRoomScreen extends StatefulWidget {
 class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final _scroll = ScrollController();
   final _input = TextEditingController();
+  final _composerFocus = FocusNode();
   final List<ChatMessage> _messages = [];
   final Map<String, String> _mediaUrls = {};
   final Map<String, DateTime> _mediaSignedAt = {};
@@ -79,6 +82,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
     _scroll.dispose();
     _input.dispose();
+    _composerFocus.dispose();
     super.dispose();
   }
 
@@ -340,7 +344,37 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   void _startReply(ChatMessage message) {
+    if (message.isDeleted) return;
     setState(() => _replyingTo = message);
+    // WhatsApp behaviour: the reply bar appears and the keyboard comes up.
+    _composerFocus.requestFocus();
+  }
+
+  /// Tap on a reaction pill: show who picked it, in rooms that show names.
+  ///
+  /// Reactions are never toggled from here — adding or removing one stays on
+  /// the long-press sheet, so a tap can never change the count by accident.
+  Future<void> _showReactors(ChatMessage message, String emoji) async {
+    final namesVisible = _details?.revealsEveryone ?? false;
+    final count = message.reactions
+        .where((reaction) => reaction.emoji == emoji)
+        .fold<int>(0, (sum, reaction) => sum + reaction.count);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.surface(context),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) => _ReactorsSheet(
+        emoji: emoji,
+        count: count,
+        load: namesVisible
+            ? () => SocialService.messageReactors(message.id)
+            : null,
+      ),
+    );
   }
 
   Future<void> _openAttach() async {
@@ -960,15 +994,22 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                           );
                         }
                         final message = _messages[_messages.length - 1 - index];
-                        return _MessageBubble(
-                          message: message,
-                          mediaUrl: message.mediaPath == null
-                              ? null
-                              : _mediaUrls[message.mediaPath!],
-                          onOpen: () => _openViewer(message),
-                          onLongPress: () => _showActions(message),
-                          onMore: () => _showActions(message),
-                          onReact: (emoji) => _react(message, emoji),
+                        return SwipeToReply(
+                          itemId: message.id,
+                          enabled: !message.isDeleted,
+                          onReply: () => _startReply(message),
+                          child: _MessageBubble(
+                            message: message,
+                            mediaUrl: message.mediaPath == null
+                                ? null
+                                : _mediaUrls[message.mediaPath!],
+                            onOpen: () => _openViewer(message),
+                            onLongPress: () => _showActions(message),
+                            onMore: () => _showActions(message),
+                            onReact: (emoji) => _react(message, emoji),
+                            onShowReactions: (emoji) =>
+                                _showReactors(message, emoji),
+                          ),
                         );
                       },
                     ),
@@ -977,6 +1018,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         ),
         _Composer(
           controller: _input,
+          focusNode: _composerFocus,
           reveal: _reveal,
           sending: _sending,
           busy: _mediaBusy != null,
@@ -1060,6 +1102,70 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 }
 
+/// The little emoji pills under a bubble. Tapping one asks who reacted; it
+/// never adds or removes a reaction — that stays on the long-press sheet.
+class _ReactionPills extends StatelessWidget {
+  const _ReactionPills({
+    required this.message,
+    required this.onMine,
+    required this.foreground,
+    required this.onTap,
+  });
+
+  final ChatMessage message;
+
+  /// Whether the bubble underneath is my own (accent-filled) bubble.
+  final bool onMine;
+  final Color foreground;
+  final ValueChanged<String> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      runSpacing: 4,
+      children: [
+        for (final reaction in message.reactions)
+          InkWell(
+            onTap: () => onTap(reaction.emoji),
+            borderRadius: BorderRadius.circular(100),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: onMine
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : AppTheme.bg(context),
+                borderRadius: BorderRadius.circular(100),
+                border: Border.all(
+                  color: onMine
+                      ? Colors.white.withValues(alpha: 0.35)
+                      : AppTheme.line(context),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(reaction.emoji, style: const TextStyle(fontSize: 12)),
+                  if (reaction.count > 1) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      '${reaction.count}',
+                      style: AppText.body(
+                        10,
+                        color: foreground,
+                        w: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
     required this.message,
@@ -1068,6 +1174,7 @@ class _MessageBubble extends StatelessWidget {
     required this.onLongPress,
     required this.onMore,
     required this.onReact,
+    required this.onShowReactions,
   });
 
   final ChatMessage message;
@@ -1077,6 +1184,9 @@ class _MessageBubble extends StatelessWidget {
   final VoidCallback onMore;
   final ValueChanged<String> onReact;
 
+  /// Tapping a reaction pill asks who picked it — it never adds a reaction.
+  final ValueChanged<String> onShowReactions;
+
   @override
   Widget build(BuildContext context) {
     if (message.isSticker) {
@@ -1084,6 +1194,7 @@ class _MessageBubble extends StatelessWidget {
         message: message,
         onLongPress: onLongPress,
         onMore: onMore,
+        onShowReactions: onShowReactions,
       );
     }
     final mine = message.isMine;
@@ -1277,53 +1388,11 @@ class _MessageBubble extends StatelessWidget {
               if (message.hasReactions)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [
-                      for (final reaction in message.reactions)
-                        InkWell(
-                          onTap: () => onReact(reaction.emoji),
-                          borderRadius: BorderRadius.circular(100),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: mine
-                                  ? Colors.white.withValues(alpha: 0.2)
-                                  : AppTheme.bg(context),
-                              borderRadius: BorderRadius.circular(100),
-                              border: Border.all(
-                                color: mine
-                                    ? Colors.white.withValues(alpha: 0.35)
-                                    : AppTheme.line(context),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  reaction.emoji,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                if (reaction.count > 1) ...[
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '${reaction.count}',
-                                    style: AppText.body(
-                                      10,
-                                      color: foreground,
-                                      w: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
+                  child: _ReactionPills(
+                    message: message,
+                    onMine: mine,
+                    foreground: foreground,
+                    onTap: onShowReactions,
                   ),
                 ),
             ],
@@ -1339,11 +1408,13 @@ class _StickerBubble extends StatelessWidget {
     required this.message,
     required this.onLongPress,
     required this.onMore,
+    required this.onShowReactions,
   });
 
   final ChatMessage message;
   final VoidCallback onLongPress;
   final VoidCallback onMore;
+  final ValueChanged<String> onShowReactions;
 
   @override
   Widget build(BuildContext context) {
@@ -1427,6 +1498,16 @@ class _StickerBubble extends StatelessWidget {
                   ],
                 ),
               ),
+              if (message.hasReactions)
+                Padding(
+                  padding: const EdgeInsets.only(top: 3),
+                  child: _ReactionPills(
+                    message: message,
+                    onMine: false,
+                    foreground: AppTheme.ink(context),
+                    onTap: onShowReactions,
+                  ),
+                ),
             ],
           ),
         ),
@@ -1435,9 +1516,248 @@ class _StickerBubble extends StatelessWidget {
   }
 }
 
+/// "Who reacted" — one row per person behind a reaction pill.
+///
+/// [load] is null in rooms that hide names; the sheet then explains that the
+/// list is private instead of pretending nobody reacted.
+class _ReactorsSheet extends StatefulWidget {
+  const _ReactorsSheet({
+    required this.emoji,
+    required this.count,
+    required this.load,
+  });
+
+  final String emoji;
+  final int count;
+  final Future<List<MessageReactor>> Function()? load;
+
+  @override
+  State<_ReactorsSheet> createState() => _ReactorsSheetState();
+}
+
+class _ReactorsSheetState extends State<_ReactorsSheet> {
+  Future<List<MessageReactor>>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = widget.load?.call();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = AppTheme.accent(context);
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          10,
+          18,
+          16 + MediaQuery.paddingOf(context).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 34,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.line(context),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    widget.emoji,
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'REACTIONS',
+                        style: AppText.mono(
+                          8.5,
+                          color: AppTheme.muted(context),
+                          ls: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${widget.count} '
+                        '${widget.count == 1 ? 'PERSON' : 'PEOPLE'}',
+                        style: AppText.body(
+                          13,
+                          color: AppTheme.ink(context),
+                          w: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Close',
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _body(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _body(BuildContext context) {
+    final future = _future;
+    if (future == null) {
+      return Text(
+        'Reactions stay anonymous in this room. Switch the room to names '
+        'visible to see who reacted.',
+        style: AppText.body(12.5, color: AppTheme.muted(context), h: 1.5),
+      );
+    }
+    return FutureBuilder<List<MessageReactor>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 22),
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.accent(context),
+                ),
+              ),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Text(
+              friendlyError(snapshot.error!),
+              style: AppText.body(12.5, color: AppTheme.muted(context), h: 1.5),
+            ),
+          );
+        }
+        final rows = (snapshot.data ?? const <MessageReactor>[])
+            .where((reactor) => reactor.emoji == widget.emoji)
+            .toList()
+            .reversed
+            .toList();
+        if (rows.isEmpty) {
+          return Text(
+            'That reaction is already gone.',
+            style: AppText.body(12.5, color: AppTheme.muted(context), h: 1.5),
+          );
+        }
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 340),
+          child: ListView.builder(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            itemCount: rows.length,
+            itemBuilder: (context, index) =>
+                _row(context, rows[index], rows[index].userId == _myId),
+          ),
+        );
+      },
+    );
+  }
+
+  String? get _myId => AuthService.currentUserId;
+
+  Widget _row(BuildContext context, MessageReactor reactor, bool mine) {
+    final accent = AppTheme.accent(context);
+    final createdAt = reactor.createdAt;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          MateAvatar(
+            handle: reactor.handle ?? '',
+            size: 32,
+            anonymous: !reactor.hasHandle,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  reactor.hasHandle ? '@${reactor.handle}' : 'ChatMate member',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppText.body(
+                    13,
+                    color: AppTheme.ink(context),
+                    w: FontWeight.w600,
+                  ),
+                ),
+                if (reactor.displayName.trim().isNotEmpty)
+                  Text(
+                    reactor.displayName.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppText.body(11, color: AppTheme.muted(context)),
+                  ),
+              ],
+            ),
+          ),
+          if (mine)
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                'YOU',
+                style: AppText.mono(7.5, color: accent, ls: 0.9),
+              ),
+            ),
+          Text(widget.emoji, style: const TextStyle(fontSize: 15)),
+          if (createdAt != null) ...[
+            const SizedBox(width: 8),
+            Text(
+              clockTime(createdAt),
+              style: AppText.mono(8, color: AppTheme.muted(context), ls: 0.4),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _Composer extends StatelessWidget {
   const _Composer({
     required this.controller,
+    required this.focusNode,
     required this.reveal,
     required this.sending,
     required this.busy,
@@ -1454,6 +1774,7 @@ class _Composer extends StatelessWidget {
   });
 
   final TextEditingController controller;
+  final FocusNode focusNode;
   final bool reveal;
   final bool sending;
   final bool busy;
@@ -1642,6 +1963,7 @@ class _Composer extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                   child: TextField(
                     controller: controller,
+                    focusNode: focusNode,
                     onChanged: onChanged,
                     minLines: 1,
                     maxLines: 5,
