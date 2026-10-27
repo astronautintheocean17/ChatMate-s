@@ -22,12 +22,17 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// The edge function sends a `notification` block, and FCM already displays that
+// itself. Showing it again here produced two identical notifications per
+// message, so this handler only covers data-only payloads (e.g. a future silent
+// sync). Keep it that way, or drop the notification block from the function.
 messaging.onBackgroundMessage((payload) => {
-  const notification = payload.notification || {};
+  if (payload.notification) return;
+
   const data = payload.data || {};
 
-  self.registration.showNotification(notification.title || 'ChatMate', {
-    body: notification.body || 'You have a new message.',
+  self.registration.showNotification(data.title || 'ChatMate', {
+    body: data.body || 'You have a new message.',
     icon: '/icons/Icon-192.png',
     badge: '/icons/Icon-192.png',
     tag: data.room_id ? 'room-' + data.room_id : 'chatmate',

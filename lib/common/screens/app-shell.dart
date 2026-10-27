@@ -2,12 +2,13 @@
 // The signed-in app frame: Profile / Home / Search, always reachable.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../../data/push-service.dart';
 import '../../theme/app-theme.dart';
 import '../../users/screens/home-screen.dart';
 import '../../users/screens/profile-screen.dart';
 import '../../users/screens/search-screen.dart';
+import '../back/back-coordinator.dart';
 
 enum AppTab { profile, home, search }
 
@@ -27,10 +28,39 @@ class AppShell extends StatefulWidget {
 
 class AppShellState extends State<AppShell> {
   late AppTab _tab = widget.initialTab;
+  late final Object _backToken;
 
   void open(AppTab tab) {
     if (_tab == tab) return;
     setState(() => _tab = tab);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // The shell owns the "back goes Home first" rule; the exit question itself
+    // belongs to BackCoordinator so every screen shares it.
+    _backToken = BackCoordinator.instance.register(_handleBack);
+    // Ask for notifications after the first frame, never before the UI exists.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      PushService.maybePrompt();
+    });
+  }
+
+  @override
+  void dispose() {
+    BackCoordinator.instance.unregister(_backToken);
+    super.dispose();
+  }
+
+  /// Android back while the shell is the top route: jump to Home, then let the
+  /// coordinator ask before leaving. Returns false to hand the press over.
+  bool _handleBack() {
+    if (_tab != AppTab.home) {
+      open(AppTab.home);
+      return true;
+    }
+    return false;
   }
 
   @override
@@ -39,83 +69,18 @@ class AppShellState extends State<AppShell> {
 
     return AppShellScope(
       state: this,
-      child: PopScope(
-        // The shell never lets the system close the app on its own: back goes
-        // to the previous screen, then to Home, and only then asks to exit.
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) return;
-          _handleBack();
-        },
-        child: Scaffold(
-          backgroundColor: AppTheme.bg(context),
-          body: IndexedStack(
-            index: index,
-            children: const [ProfileScreen(), HomeScreen(), SearchScreen()],
-          ),
-          bottomNavigationBar: _BottomBar(
-            index: index,
-            onTap: (value) => open(AppTab.values[value]),
-          ),
+      child: Scaffold(
+        backgroundColor: AppTheme.bg(context),
+        body: IndexedStack(
+          index: index,
+          children: const [ProfileScreen(), HomeScreen(), SearchScreen()],
+        ),
+        bottomNavigationBar: _BottomBar(
+          index: index,
+          onTap: (value) => open(AppTab.values[value]),
         ),
       ),
     );
-  }
-
-  /// Android back: pop a pushed screen, else walk back to Home, else ask.
-  Future<void> _handleBack() async {
-    final navigator = Navigator.of(context);
-    if (navigator.canPop()) {
-      navigator.pop();
-      return;
-    }
-    if (_tab != AppTab.home) {
-      open(AppTab.home);
-      return;
-    }
-    final leave = await _confirmExit();
-    if (!mounted || !leave) return;
-    await SystemNavigator.pop();
-  }
-
-  Future<bool> _confirmExit() async {
-    final leave = await showDialog<bool>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppTheme.surface(dialogContext),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Leave ChatMate?',
-          style: AppText.serif(20, color: AppTheme.ink(dialogContext)),
-        ),
-        content: Text(
-          'You will not get new messages until you open the app again.',
-          style: AppText.body(
-            12.5,
-            color: AppTheme.muted(dialogContext),
-            h: 1.5,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text(
-              'STAY',
-              style: AppText.mono(10, color: AppTheme.muted(dialogContext)),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: Text(
-              'EXIT',
-              style: AppText.mono(10, color: AppTheme.accent(dialogContext)),
-            ),
-          ),
-        ],
-      ),
-    );
-    return leave ?? false;
   }
 }
 

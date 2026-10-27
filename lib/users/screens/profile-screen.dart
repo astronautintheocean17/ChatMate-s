@@ -365,18 +365,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
           subtitle: subtitle,
           highlight: state == PushState.ready,
           onTap: () async {
-            await PushService.boot();
-            await PushService.syncToken();
+            final ok = await PushService.enable();
             if (!context.mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  PushService.isReady
-                      ? 'Notifications are on.'
-                      : 'Notifications are not available right now.',
-                ),
-              ),
-            );
+            final message = ok
+                ? 'Notifications are on.'
+                : switch (PushService.state.value) {
+                    PushState.denied =>
+                      'Blocked. Turn notifications on for ChatMate in system settings.',
+                    PushState.unavailable =>
+                      'Notifications are not available in this build.',
+                    _ => 'Notifications could not be enabled right now.',
+                  };
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text(message)));
           },
         );
       },

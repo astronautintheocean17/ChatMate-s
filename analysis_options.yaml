@@ -9,6 +9,13 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # Xcode Swift Package Manager checkouts and web build output land in build/.
+  # They are generated, third-party and not ours to lint (and their example
+  # folders ship their own missing analysis_options.yaml includes).
+  exclude:
+    - build/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

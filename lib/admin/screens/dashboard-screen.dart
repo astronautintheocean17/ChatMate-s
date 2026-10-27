@@ -6,6 +6,7 @@ import '../../data/admin-service.dart';
 import '../../data/auth-service.dart';
 import '../../data/errors.dart';
 import '../../data/models.dart';
+import '../../data/push-service.dart';
 import '../../theme/app-theme.dart';
 import 'admin-rooms-screen.dart';
 import 'admin-users-screen.dart';
@@ -50,6 +51,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
     );
     if (confirmed != true) return;
 
+    // Clear this device's push token first: after signOut the row is protected
+    // by RLS and this phone would keep receiving the admin's notifications.
+    await PushService.signOut();
     await AuthService.signOut();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(

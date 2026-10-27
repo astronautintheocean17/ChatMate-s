@@ -172,6 +172,7 @@ async function sendToToken(
   }
   console.error(`FCM ${response.status}: ${text}`);
   return 'error';
+}
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
@@ -307,4 +308,3 @@ Deno.serve(async (request) => {
   );
 });
 
-}

@@ -2,7 +2,9 @@
 // Pumps the real app shell with no backend attached. Every screen catches its
 // own load failures, so this proves the widget trees build and the tabs switch
 // without a single thrown exception.
+import 'package:chatmate/common/back/back-coordinator.dart';
 import 'package:chatmate/common/screens/app-shell.dart';
+import 'package:chatmate/common/widgets/app-exit-guard.dart';
 import 'package:chatmate/common/screens/create-id-screen.dart';
 import 'package:chatmate/theme/app-theme.dart';
 import 'package:chatmate/users/screens/home-screen.dart';
@@ -22,11 +24,20 @@ Future<void> _pressBack(WidgetTester tester) async {
 }
 
 void main() {
+  setUp(() {
+    // The coordinator is a process-wide singleton; start every test clean.
+    BackCoordinator.instance.clear();
+  });
+
   testWidgets('the three tabs build and switch cleanly', (tester) async {
     SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light(), home: const AppShell()),
+      MaterialApp(
+        theme: AppTheme.light(),
+        // The guard is what turns a system back press into the exit question.
+        home: const AppExitGuard(child: AppShell()),
+      ),
     );
     await tester.pump();
     expect(tester.takeException(), isNull);
@@ -50,7 +61,11 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light(), home: const AppShell()),
+      MaterialApp(
+        theme: AppTheme.light(),
+        // The guard is what turns a system back press into the exit question.
+        home: const AppExitGuard(child: AppShell()),
+      ),
     );
     await tester.pump();
     expect(find.text('Leave ChatMate?'), findsNothing);
@@ -70,7 +85,11 @@ void main() {
     SharedPreferences.setMockInitialValues({});
 
     await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light(), home: const AppShell()),
+      MaterialApp(
+        theme: AppTheme.light(),
+        // The guard is what turns a system back press into the exit question.
+        home: const AppExitGuard(child: AppShell()),
+      ),
     );
     await tester.pump();
 

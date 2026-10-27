@@ -1,10 +1,13 @@
 // lib/main.dart
+import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'supabase-config.dart';
 import 'common/screens/session-gate.dart';
 import 'common/screens/setup-required-screen.dart';
+import 'common/widgets/app-exit-guard.dart';
 import 'data/push-service.dart';
 import 'theme/app-theme.dart';
 import 'theme/theme-controller.dart';
@@ -35,9 +38,12 @@ Future<void> main() async {
   } catch (_) {
     // Ignore: no Firebase on this platform.
   }
-  await PushService.boot();
 
   runApp(const MyApp());
+
+  // Fire and forget: boot never throws, never asks for permission and must not
+  // hold up the first frame (an OS prompt over a blank screen is a bug).
+  unawaited(PushService.boot());
 }
 
 class _ConfigApp extends StatelessWidget {
@@ -51,7 +57,7 @@ class _ConfigApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      home: SetupRequiredScreen(error: error),
+      home: AppExitGuard(child: SetupRequiredScreen(error: error)),
     );
   }
 }
@@ -71,7 +77,9 @@ class MyApp extends StatelessWidget {
           theme: AppTheme.light(),
           darkTheme: AppTheme.dark(),
           themeMode: themeController.mode,
-          home: const SessionGate(),
+          // Every screen sits inside the guard, so no back press can close the
+          // app without the user confirming it first.
+          home: const AppExitGuard(child: SessionGate()),
         );
       },
     );
