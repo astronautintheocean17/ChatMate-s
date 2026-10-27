@@ -33,7 +33,8 @@ import 'social-service.dart';
 /// Set this to the "Web Push certificate" key from
 /// Firebase console → Project settings → Cloud Messaging → Web configuration.
 /// Web push stays disabled while it is empty.
-const String kWebPushVapidKey = '';
+const String kWebPushVapidKey =
+    'BGJpGMySJXaNoTMG-AI_3hIDdEmSbVqaYfobUYjYh-ciD5QFjShqWqE5H4wmyQ8shDdhKOstro1V7wd4E0EF4mM';
 
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
